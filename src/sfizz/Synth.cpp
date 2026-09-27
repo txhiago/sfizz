@@ -309,6 +309,7 @@ void Synth::Impl::clear()
     masterOpcodes_.clear();
     groupOpcodes_.clear();
     unknownOpcodes_.clear();
+    numIgnoredEffects_ = 0;
     modificationTime_ = absl::nullopt;
     playheadMoved_ = false;
 
@@ -476,6 +477,15 @@ void Synth::Impl::handleControlOpcodes(const std::vector<Opcode>& members)
 
 void Synth::Impl::handleEffectOpcodes(const std::vector<Opcode>& rawMembers)
 {
+    // Before any bus is created, not after: an fxN bus that exists receives the
+    // regions' effectN sends and mixes them back in through fxNtomain, so
+    // skipping only the effect would still change the level. With no header
+    // processed there is only the main bus, and the signal passes it dry.
+    if (!effectsEnabled_) {
+        ++numIgnoredEffects_;
+        return;
+    }
+
     absl::string_view busName { "main" };
     uint16_t output { Default::output };
 
@@ -1850,6 +1860,24 @@ const std::vector<std::string>& Synth::getUnknownOpcodes() const noexcept
 {
     Impl& impl = *impl_;
     return impl.unknownOpcodes_;
+}
+
+void Synth::setEffectsEnabled(bool enabled) noexcept
+{
+    Impl& impl = *impl_;
+    impl.effectsEnabled_ = enabled;
+}
+
+bool Synth::getEffectsEnabled() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.effectsEnabled_;
+}
+
+int Synth::getNumIgnoredEffects() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.numIgnoredEffects_;
 }
 size_t Synth::getNumPreloadedSamples() const noexcept
 {

@@ -115,6 +115,21 @@ const std::vector<std::string>& sfz::Sfizz::getUnknownOpcodes() const noexcept
     return synth->synth.getUnknownOpcodes();
 }
 
+void sfz::Sfizz::setEffectsEnabled(bool enabled) noexcept
+{
+    synth->synth.setEffectsEnabled(enabled);
+}
+
+bool sfz::Sfizz::getEffectsEnabled() const noexcept
+{
+    return synth->synth.getEffectsEnabled();
+}
+
+int sfz::Sfizz::getNumIgnoredEffects() const noexcept
+{
+    return synth->synth.getNumIgnoredEffects();
+}
+
 size_t sfz::Sfizz::getNumPreloadedSamples() const noexcept
 {
     return synth->synth.getNumPreloadedSamples();

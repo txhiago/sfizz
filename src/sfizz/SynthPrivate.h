@@ -291,6 +291,10 @@ struct Synth::Impl final: public Parser::Listener {
     // Set as sw_default if present in the file
     absl::optional<uint8_t> currentSwitch_;
     std::vector<std::string> unknownOpcodes_;
+    // StageKeys: when false, <effect> headers are counted and skipped at load,
+    // so no effect is ever built and nothing but the dry signal reaches main.
+    bool effectsEnabled_ { true };
+    int numIgnoredEffects_ { 0 };
     using RegionViewVector = std::vector<Region*>;
     using LayerViewVector = std::vector<Layer*>;
     using VoiceViewVector = std::vector<Voice*>;

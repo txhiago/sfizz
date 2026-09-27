@@ -42,6 +42,7 @@ patches, and `d885ee50` is one of them, already fixed here.
 | Patch | Why |
 |---|---|
 | `fix: drop the template disambiguator atomic_queue cannot use` | Four call sites in the vendored `atomic_queue` write `Base::template do_pop_any(...)` with no argument list. That is ill-formed C++, and clang promoted the diagnostic to a default error after 1.2.3 shipped. Fixed in the header rather than suppressed project-wide |
+| `feat: let the host skip <effect> headers at load` | StageKeys' Engine owns effects, not the instrument file, and V1 has none. `Sfizz::setEffectsEnabled(false)` makes the next load skip every `<effect>` header before any bus is created, so no effect and no `fxN` bus exist and every region plays dry through main whatever its `effectN` sends say. `getNumIgnoredEffects()` reports how many were skipped. Default is unchanged: enabled |
 
 ## Two notes for anyone embedding this
 

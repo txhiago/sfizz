@@ -277,6 +277,16 @@ public:
      */
     const std::vector<std::string>& getUnknownOpcodes() const noexcept;
     /**
+     * @brief Build <effect> headers at load (the default), or skip them.
+     * Takes effect on the next load; see sfz::Sfizz::setEffectsEnabled.
+     */
+    void setEffectsEnabled(bool enabled) noexcept;
+    bool getEffectsEnabled() const noexcept;
+    /**
+     * @brief Number of <effect> headers skipped by the last load.
+     */
+    int getNumIgnoredEffects() const noexcept;
+    /**
      * @brief Get the number of preloaded samples in the synth
      *
      * @return size_t

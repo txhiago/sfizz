@@ -258,6 +258,32 @@ public:
     const std::vector<std::string>& getUnknownOpcodes() const noexcept;
 
     /**
+     * @brief Build the <effect> headers of an instrument when it is loaded
+     * (the default), or skip them.
+     *
+     * Skipped headers create no effect and no fxN bus, so every region plays
+     * dry through the main bus at unity, whatever its effectN sends say.
+     * Takes effect on the next load, not on the instrument already loaded.
+     *
+     * StageKeys addition: its Engine, not the instrument file, owns effects.
+     *
+     * @par Thread-safety constraints
+     * - @b CT: the function must be invoked from the Control thread
+     */
+    void setEffectsEnabled(bool enabled) noexcept;
+
+    /**
+     * @brief Whether <effect> headers are built at load.
+     */
+    bool getEffectsEnabled() const noexcept;
+
+    /**
+     * @brief Number of <effect> headers the last load skipped. Zero when
+     * effects are enabled.
+     */
+    int getNumIgnoredEffects() const noexcept;
+
+    /**
      * @brief Return the number of preloaded samples in the synth.
      * @since 0.2.0
      */
