@@ -1051,6 +1051,12 @@ int Synth::getNumActiveVoices() const noexcept
         std::min(impl.numVoices_, activeVoices) : activeVoices;
 }
 
+int Synth::getNumRenderingVoices() const noexcept
+{
+    Impl& impl = *impl_;
+    return static_cast<int>(impl.voiceManager_.getNumActiveVoices());
+}
+
 std::vector<const Voice*> Synth::getActiveVoices() const noexcept
 {
     Impl& impl = *impl_;

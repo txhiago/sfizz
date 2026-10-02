@@ -800,9 +800,25 @@ public:
 
     /**
      * @brief Return the number of active voices.
+     *
+     * Clamped to the voice cap set by setNumVoices(): voices beyond it - stolen
+     * voices still fading out in the overflow pool - are not counted, so this
+     * cannot exceed the cap whatever is rendering. See getNumRenderingVoices().
      * @since 0.2.0
      */
     int getNumActiveVoices() const noexcept;
+
+    /**
+     * @brief Return the number of voices rendering, overflow voices included.
+     *
+     * The real load. The voice pool holds the cap plus an overflow of 1.5x the
+     * cap, so a stolen voice can fade out while the note that stole it starts;
+     * during stealing this can exceed setNumVoices(). Reads a count - nothing is
+     * allocated or built.
+     *
+     * StageKeys addition.
+     */
+    int getNumRenderingVoices() const noexcept;
 
     /**
      * @brief Return the total number of voices in the synth (the polyphony).

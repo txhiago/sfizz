@@ -291,6 +291,11 @@ int sfz::Sfizz::getNumActiveVoices() const noexcept
     return synth->synth.getNumActiveVoices();
 }
 
+int sfz::Sfizz::getNumRenderingVoices() const noexcept
+{
+    return synth->synth.getNumRenderingVoices();
+}
+
 int sfz::Sfizz::getNumVoices() const noexcept
 {
     return synth->synth.getNumVoices();

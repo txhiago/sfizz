@@ -565,6 +565,11 @@ public:
      * @return int
      */
     int getNumActiveVoices() const noexcept;
+    /**
+     * @brief Get the number of voices rendering, overflow voices included -
+     * unlike getNumActiveVoices(), not clamped to the voice cap.
+     */
+    int getNumRenderingVoices() const noexcept;
 
     /**
      * @brief Get the active voices as a view
