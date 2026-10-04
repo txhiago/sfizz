@@ -144,13 +144,13 @@ void VoiceManager::setStealingAlgorithm(StealingAlgorithm algorithm)
     }
 }
 
-void VoiceManager::checkPolyphony(const Region* region, int delay, const TriggerEvent& triggerEvent) noexcept
+bool VoiceManager::checkPolyphony(const Region* region, int delay, const TriggerEvent& triggerEvent) noexcept
 {
     checkNotePolyphony(region, delay, triggerEvent);
     checkRegionPolyphony(region, delay);
     checkGroupPolyphony(region, delay);
     checkSetPolyphony(region, delay);
-    checkEnginePolyphony(delay);
+    return checkEnginePolyphony(delay, triggerEvent.type == TriggerEventType::NoteOff);
 }
 
 Voice* VoiceManager::findFreeVoice() noexcept
@@ -273,11 +273,59 @@ void VoiceManager::checkSetPolyphony(const Region* region, int delay) noexcept
     }
 }
 
-void VoiceManager::checkEnginePolyphony(int delay) noexcept
+bool VoiceManager::checkEnginePolyphony(int delay, bool releaseVoice) noexcept
 {
+    if (releaseVoicesYield_) {
+        // StageKeys: at the limit, the least audible voices make room first.
+        //
+        //   1. Release samples - resonance, key noise, anything a note-off
+        //      starts: the most expendable audio in an instrument.
+        //   2. Tails - notes the player has let go, fading out. Only a new note
+        //      takes one: cutting a tail ends a note audibly, which a release
+        //      sample is not worth.
+        //   3. Held notes, by the configured stealer, as before.
+        //
+        // So a release sample only ever replaces an older release sample, and is
+        // skipped when there is none. Without this, sfizz's oldest-voice stealer
+        // takes a held note before a fading tail, and releasing a chord at the
+        // cap lets its release samples silence the notes still held. Notes held
+        // by the sustain pedal are not in release, so they keep a held key's
+        // protection.
+        unsigned playing = 0;
+        Voice* oldestReleaseSample = nullptr;
+        Voice* oldestTail = nullptr;
+        for (Voice* voice : activeVoices_) {
+            if (voice == nullptr || voice->offedOrFree())
+                continue;
+            ++playing;
+            if (voice->getTriggerEvent().type == TriggerEventType::NoteOff) {
+                if (oldestReleaseSample == nullptr || voice->getAge() > oldestReleaseSample->getAge())
+                    oldestReleaseSample = voice;
+            } else if (voice->releasing()) {
+                // releasing(), not released(): a whole chord let go arrives in one
+                // block, and its notes' releases are only scheduled until the next
+                // render.
+                if (oldestTail == nullptr || voice->getAge() > oldestTail->getAge())
+                    oldestTail = voice;
+            }
+        }
+        if (playing < static_cast<unsigned>(numRequiredVoices_))
+            return true;
+        if (oldestReleaseSample != nullptr) {
+            SisterVoiceRing::offAllSisters(oldestReleaseSample, delay, true);
+            return true;
+        }
+        if (releaseVoice)
+            return false;  // never a tail or a held note for a release sample
+        if (oldestTail != nullptr) {
+            SisterVoiceRing::offAllSisters(oldestTail, delay, true);
+            return true;
+        }
+    }
     Voice* candidate = stealer_->checkPolyphony(
         absl::MakeSpan(activeVoices_), numRequiredVoices_);
     SisterVoiceRing::offAllSisters(candidate, delay, true);
+    return true;
 }
 
 } // namespace sfz

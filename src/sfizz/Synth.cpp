@@ -1317,7 +1317,8 @@ void Synth::Impl::startVoice(Layer* layer, int delay, const TriggerEvent& trigge
 {
     const Region& region = layer->getRegion();
 
-    voiceManager_.checkPolyphony(&region, delay, triggerEvent);
+    if (!voiceManager_.checkPolyphony(&region, delay, triggerEvent))
+        return;  // a release sample yielding at the limit
     Voice* selectedVoice = voiceManager_.findFreeVoice();
     if (selectedVoice == nullptr)
         return;
@@ -1878,6 +1879,18 @@ bool Synth::getEffectsEnabled() const noexcept
 {
     Impl& impl = *impl_;
     return impl.effectsEnabled_;
+}
+
+void Synth::setReleaseVoicesYield(bool yield) noexcept
+{
+    Impl& impl = *impl_;
+    impl.voiceManager_.setReleaseVoicesYield(yield);
+}
+
+bool Synth::getReleaseVoicesYield() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getReleaseVoicesYield();
 }
 
 int Synth::getNumIgnoredEffects() const noexcept

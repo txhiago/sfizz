@@ -278,6 +278,33 @@ public:
     bool getEffectsEnabled() const noexcept;
 
     /**
+     * @brief Make voices in their release phase the first sacrificed at the
+     * engine's polyphony limit (off by default: upstream behavior).
+     *
+     * With this on, at the limit room is made in this order, oldest first
+     * within each: release samples (voices a note-off started - `trigger=release`
+     * resonance, key noise); then, for a note-on only, tails (notes let go and
+     * fading; not while the sustain pedal holds them); then held notes, by the
+     * configured stealing policy. A release sample only ever replaces an older
+     * release sample and is skipped when there is none: it never cuts a tail
+     * short or steals a held note. Region, group and set polyphony are
+     * unchanged.
+     *
+     * StageKeys addition: without it, the oldest-voice stealer takes a held note
+     * before a fading tail, and releasing a chord at the limit lets its release
+     * samples steal the notes still held.
+     *
+     * @par Thread-safety constraints
+     * - @b CT: the function must be invoked from the Control thread
+     */
+    void setReleaseVoicesYield(bool yield) noexcept;
+
+    /**
+     * @brief Whether release samples yield at the polyphony limit.
+     */
+    bool getReleaseVoicesYield() const noexcept;
+
+    /**
      * @brief Number of <effect> headers the last load skipped. Zero when
      * effects are enabled.
      */

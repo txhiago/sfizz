@@ -283,6 +283,12 @@ public:
     void setEffectsEnabled(bool enabled) noexcept;
     bool getEffectsEnabled() const noexcept;
     /**
+     * @brief Make release samples yield at the polyphony limit; see
+     * sfz::Sfizz::setReleaseVoicesYield.
+     */
+    void setReleaseVoicesYield(bool yield) noexcept;
+    bool getReleaseVoicesYield() const noexcept;
+    /**
      * @brief Number of <effect> headers skipped by the last load.
      */
     int getNumIgnoredEffects() const noexcept;

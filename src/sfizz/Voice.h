@@ -213,6 +213,12 @@ public:
      */
     bool released() const noexcept;
     /**
+     * @brief Is the voice released, or has its release been scheduled and not
+     * yet rendered? StageKeys: a note-off schedules the release for the next
+     * render, so between the two released() is still false.
+     */
+    bool releasing() const noexcept;
+    /**
      * @brief Can the voice be reused (i.e. is it releasing after being killed or free)
      *
      * @return true

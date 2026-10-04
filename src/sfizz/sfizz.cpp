@@ -120,6 +120,16 @@ void sfz::Sfizz::setEffectsEnabled(bool enabled) noexcept
     synth->synth.setEffectsEnabled(enabled);
 }
 
+void sfz::Sfizz::setReleaseVoicesYield(bool yield) noexcept
+{
+    synth->synth.setReleaseVoicesYield(yield);
+}
+
+bool sfz::Sfizz::getReleaseVoicesYield() const noexcept
+{
+    return synth->synth.getReleaseVoicesYield();
+}
+
 bool sfz::Sfizz::getEffectsEnabled() const noexcept
 {
     return synth->synth.getEffectsEnabled();

@@ -107,7 +107,14 @@ struct VoiceManager final : public Voice::StateListener
      * @param delay
      * @param triggerEvent
      */
-    void checkPolyphony(const Region* region, int delay, const TriggerEvent& triggerEvent) noexcept;
+    bool checkPolyphony(const Region* region, int delay, const TriggerEvent& triggerEvent) noexcept;
+
+    /**
+     * @brief Make voices started by a note-off - release samples - yield at the
+     * engine's polyphony limit. See sfz::Sfizz::setReleaseVoicesYield.
+     */
+    void setReleaseVoicesYield(bool yield) noexcept { releaseVoicesYield_ = yield; }
+    bool getReleaseVoicesYield() const noexcept { return releaseVoicesYield_; }
 
     /**
      * @brief Get the number of active voices
@@ -151,6 +158,7 @@ struct VoiceManager final : public Voice::StateListener
 
 private:
     int numRequiredVoices_ { config::numVoices };
+    bool releaseVoicesYield_ { false };
     std::vector<Voice> list_;
     std::vector<Voice*> activeVoices_;
     std::vector<Voice*> temp_;
@@ -196,7 +204,7 @@ private:
      *
      * @param delay
      */
-    void checkEnginePolyphony(int delay) noexcept;
+    bool checkEnginePolyphony(int delay, bool releaseVoice) noexcept;
 
 public:
     // Vector shortcuts

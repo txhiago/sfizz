@@ -224,6 +224,9 @@ struct Voice::Impl
 
     State state_ { State::idle };
     bool noteIsOff_ { false };
+    // StageKeys: release() has been called. The envelope only enters its release
+    // when the voice next renders, so released() is still false until then.
+    bool releaseScheduled_ { false };
     bool offed_ { false };
     enum class SustainState { Up, Sustaining };
     SustainState sustainState_ { SustainState::Up };
@@ -582,6 +585,8 @@ void Voice::Impl::release(int delay) noexcept
 {
     if (state_ != State::playing)
         return;
+
+    releaseScheduled_ = true;
 
     if (!region_->flexAmpEG) {
         if (egAmplitude_.getRemainingDelay() > delay)
@@ -1709,6 +1714,7 @@ void Voice::reset() noexcept
     impl.count_ = 1;
     impl.floatPositionOffset_ = 0.0f;
     impl.noteIsOff_ = false;
+    impl.releaseScheduled_ = false;
     impl.sostenutoState_ = Impl::SostenutoState::Up;
     impl.offed_ = false;
 
@@ -1788,6 +1794,12 @@ float Voice::getAveragePower() const noexcept
         return impl.powerFollower_.getAveragePower();
     else
         return 0.0f;
+}
+
+bool Voice::releasing() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.releaseScheduled_ || impl.released();
 }
 
 bool Voice::offedOrFree() const noexcept
