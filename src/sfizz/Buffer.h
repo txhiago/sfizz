@@ -185,7 +185,10 @@ public:
         else
             _alignedEnd = normalEnd;
 
-        std::memcpy(normalData, oldNormalData, std::min(newSize, oldSize) * sizeof(Type));
+        // On a first allocation there is nothing to keep, and oldNormalData is
+        // null: memcpy's arguments must be valid pointers even for a zero size.
+        if (oldNormalData != nullptr)
+            std::memcpy(normalData, oldNormalData, std::min(newSize, oldSize) * sizeof(Type));
         std::free(oldData);
 
         return true;
@@ -235,7 +238,8 @@ public:
     Buffer(const Buffer<Type, Alignment>& other)
     {
         resize(other.size());
-        std::memcpy(this->data(), other.data(), other.size() * sizeof(value_type));
+        if (other.size() != 0) // an empty buffer's data() is null
+            std::memcpy(this->data(), other.data(), other.size() * sizeof(value_type));
     }
 
     /**
@@ -258,7 +262,8 @@ public:
     {
         if (this != &other) {
             resize(other.size());
-            std::memcpy(this->data(), other.data(), other.size() * sizeof(value_type));
+            if (other.size() != 0) // an empty buffer's data() is null
+                std::memcpy(this->data(), other.data(), other.size() * sizeof(value_type));
         }
         return *this;
     }
