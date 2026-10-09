@@ -13,6 +13,8 @@
 #include "Resources.h"
 #include "Voice.h"
 #include "VoiceStealing.h"
+#include <atomic>
+#include <cstdint>
 #include <vector>
 
 namespace sfz {
@@ -117,6 +119,12 @@ struct VoiceManager final : public Voice::StateListener
     bool getReleaseVoicesYield() const noexcept { return releaseVoicesYield_; }
 
     /**
+     * @brief Voices cut to make room at the engine's polyphony limit since this
+     * manager was built. See sfz::Sfizz::getNumStolenVoices. Any thread.
+     */
+    uint64_t getNumStolenVoices() const noexcept { return stolenVoices_.load(std::memory_order_relaxed); }
+
+    /**
      * @brief Get the number of active voices
      *
      * @return size_t
@@ -159,6 +167,8 @@ struct VoiceManager final : public Voice::StateListener
 private:
     int numRequiredVoices_ { config::numVoices };
     bool releaseVoicesYield_ { false };
+    // Written by the thread that renders, read by any: relaxed, a count.
+    std::atomic<uint64_t> stolenVoices_ { 0 };
     std::vector<Voice> list_;
     std::vector<Voice*> activeVoices_;
     std::vector<Voice*> temp_;
@@ -205,6 +215,11 @@ private:
      * @param delay
      */
     bool checkEnginePolyphony(int delay, bool releaseVoice) noexcept;
+    /**
+     * @brief Off a voice and its sisters to make room at the engine limit,
+     * counting the ones still sounding.
+     */
+    void stealForEngine(Voice* voice, int delay) noexcept;
 
 public:
     // Vector shortcuts

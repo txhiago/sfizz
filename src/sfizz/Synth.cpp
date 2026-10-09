@@ -1057,6 +1057,12 @@ int Synth::getNumRenderingVoices() const noexcept
     return static_cast<int>(impl.voiceManager_.getNumActiveVoices());
 }
 
+uint64_t Synth::getNumStolenVoices() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getNumStolenVoices();
+}
+
 std::vector<const Voice*> Synth::getActiveVoices() const noexcept
 {
     Impl& impl = *impl_;

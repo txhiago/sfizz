@@ -312,20 +312,35 @@ bool VoiceManager::checkEnginePolyphony(int delay, bool releaseVoice) noexcept
         if (playing < static_cast<unsigned>(numRequiredVoices_))
             return true;
         if (oldestReleaseSample != nullptr) {
-            SisterVoiceRing::offAllSisters(oldestReleaseSample, delay, true);
+            stealForEngine(oldestReleaseSample, delay);
             return true;
         }
         if (releaseVoice)
             return false;  // never a tail or a held note for a release sample
         if (oldestTail != nullptr) {
-            SisterVoiceRing::offAllSisters(oldestTail, delay, true);
+            stealForEngine(oldestTail, delay);
             return true;
         }
     }
     Voice* candidate = stealer_->checkPolyphony(
         absl::MakeSpan(activeVoices_), numRequiredVoices_);
-    SisterVoiceRing::offAllSisters(candidate, delay, true);
+    stealForEngine(candidate, delay);
     return true;
+}
+
+void VoiceManager::stealForEngine(Voice* voice, int delay) noexcept
+{
+    if (voice == nullptr)
+        return;
+    // StageKeys: counted per voice, sisters included - a stereo SF2 note is two -
+    // and only those still sounding, so a sister already cut is not counted twice.
+    uint64_t stolen = 0;
+    SisterVoiceRing::applyToRing(voice, [&] (Voice* v) {
+        if (!v->offedOrFree())
+            ++stolen;
+        v->off(delay, true);
+    });
+    stolenVoices_.fetch_add(stolen, std::memory_order_relaxed);
 }
 
 } // namespace sfz

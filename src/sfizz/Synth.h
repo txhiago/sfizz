@@ -576,6 +576,11 @@ public:
      * unlike getNumActiveVoices(), not clamped to the voice cap.
      */
     int getNumRenderingVoices() const noexcept;
+    /**
+     * @brief Get the number of voices cut to make room at the engine's polyphony
+     * limit since the synth was built. Any thread.
+     */
+    uint64_t getNumStolenVoices() const noexcept;
 
     /**
      * @brief Get the active voices as a view

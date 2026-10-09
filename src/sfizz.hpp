@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 #include <memory>
+#include <cstdint>
 
 #if defined SFIZZ_EXPORT_SYMBOLS
   #if defined _WIN32
@@ -846,6 +847,20 @@ public:
      * StageKeys addition.
      */
     int getNumRenderingVoices() const noexcept;
+
+    /**
+     * @brief Return the number of voices cut to make room at the engine's
+     * polyphony limit, since the synth was built.
+     *
+     * Counted per voice, sister voices included (a stereo SF2 note is two), and
+     * only voices still sounding when cut. Region, group, set and note polyphony
+     * - the instrument's own choking, as authored - are not counted, nor is a
+     * release sample that never started because setReleaseVoicesYield() found
+     * no room for it. Monotonic; any thread; reads a counter.
+     *
+     * StageKeys addition.
+     */
+    uint64_t getNumStolenVoices() const noexcept;
 
     /**
      * @brief Return the total number of voices in the synth (the polyphony).
