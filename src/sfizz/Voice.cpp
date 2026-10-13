@@ -823,8 +823,12 @@ void Voice::renderBlock(AudioSpan<float, 2> buffer) noexcept
 
     impl.age_ += buffer.getNumFrames();
     if (impl.triggerDelay_) {
-        // Should be OK but just in case;
-        impl.age_ = min(impl.age_ - *impl.triggerDelay_, 0);
+        // The frames rendered since the trigger, never negative. This was
+        // min(..., 0), which set every voice's age back to 0 after its first
+        // block: fillWithData() then took the second block for the voice's
+        // start too and held its playhead for one frame, repeating a sample
+        // about one block into every note (StageKeys #168).
+        impl.age_ = max(impl.age_ - *impl.triggerDelay_, 0);
         impl.triggerDelay_ = absl::nullopt;
     }
 
