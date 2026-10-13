@@ -247,6 +247,12 @@ struct Voice::Impl
     int sourcePosition_ { 0 };
     int initialDelay_ { 0 };
     int age_ { 0 };
+    // Whether fillWithData() has yet to render this voice's first frame, so
+    // that frame plays the sample's first, wherever a trigger or region delay
+    // puts it. Not age_ == 0: the age counts from the trigger, so a start a
+    // region delay moves into a later block would skip the first sample, and
+    // an age that read 0 again held the playhead a frame (StageKeys #168).
+    bool firstFill_ { true };
     uint32_t count_ { 1 };
     int sampleEnd_ { 0 };
     int sampleSize_ { 0 };
@@ -438,6 +444,7 @@ bool Voice::startVoice(Layer* layer, int delay, const TriggerEvent& event) noexc
         delay = 0;
 
     impl.triggerDelay_ = delay;
+    impl.firstFill_ = true;
     impl.initialDelay_ = delay + static_cast<int>(regionDelay(region, midiState) * impl.sampleRate_);
     impl.startTimestamp_ = midiState.getInternalClock() + impl.initialDelay_; // need to set this before switchState
 
@@ -825,9 +832,9 @@ void Voice::renderBlock(AudioSpan<float, 2> buffer) noexcept
     if (impl.triggerDelay_) {
         // The frames rendered since the trigger, never negative. This was
         // min(..., 0), which set every voice's age back to 0 after its first
-        // block: fillWithData() then took the second block for the voice's
-        // start too and held its playhead for one frame, repeating a sample
-        // about one block into every note (StageKeys #168).
+        // block, and fillWithData() took age 0 for the voice's start: it held
+        // the playhead for one frame a block into every note (StageKeys #168).
+        // The start is firstFill_'s now.
         impl.age_ = max(impl.age_ - *impl.triggerDelay_, 0);
         impl.triggerDelay_ = absl::nullopt;
     }
@@ -1113,8 +1120,10 @@ void Voice::Impl::fillWithData(AudioSpan<float> buffer) noexcept
             (*jumps)[i] = baseRatio * centsFactor(pitch[i]);
 
         // Take the first sample if the voice just started
-        if (age_ == 0)
+        if (firstFill_) {
             jumps->front() = 0.0f;
+            firstFill_ = false;
+        }
 
         jumps->front() += floatPositionOffset_;
         cumsum<float>(*jumps, *jumps);
@@ -1715,6 +1724,7 @@ void Voice::reset() noexcept
     impl.currentPromise_.reset();
     impl.sourcePosition_ = 0;
     impl.age_ = 0;
+    impl.firstFill_ = true;
     impl.count_ = 1;
     impl.floatPositionOffset_ = 0.0f;
     impl.noteIsOff_ = false;
