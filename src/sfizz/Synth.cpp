@@ -1212,6 +1212,9 @@ void Synth::renderBlock(AudioSpan<float> buffer) noexcept
         }
     }
 
+    // The block just rendered took the starts placed in it; the schedule moves on.
+    impl.voiceManager_.advanceReleaseSchedule();
+
     { // Apply effect buses
         // -- note(jpc) there is always a "main" bus which is initially empty.
         //    without any <effect>, the signal is just going to flow through it.
@@ -1323,6 +1326,19 @@ void Synth::Impl::startVoice(Layer* layer, int delay, const TriggerEvent& trigge
 {
     const Region& region = layer->getRegion();
 
+    // StageKeys: release-triggered voices start a fixed number to a block, the
+    // rest a block or more later, and are skipped past the limit.
+    int releaseBlock = 0;
+    const bool budgeted = triggerEvent.type == TriggerEventType::NoteOff
+        && voiceManager_.releaseStartBudgeted();
+    if (budgeted) {
+        releaseBlock = voiceManager_.findReleaseSlot();
+        if (releaseBlock < 0) {
+            voiceManager_.skipReleaseVoice();
+            return;
+        }
+    }
+
     if (!voiceManager_.checkPolyphony(&region, delay, triggerEvent))
         return;  // a release sample yielding at the limit
     Voice* selectedVoice = voiceManager_.findFreeVoice();
@@ -1330,8 +1346,12 @@ void Synth::Impl::startVoice(Layer* layer, int delay, const TriggerEvent& trigge
         return;
 
     selectedVoice->reset();
-    if (selectedVoice->startVoice(layer, delay, triggerEvent))
+    const int startDelay = delay + releaseBlock * samplesPerBlock_;
+    if (selectedVoice->startVoice(layer, startDelay, triggerEvent)) {
         ring.addVoiceToRing(selectedVoice);
+        if (budgeted)
+            voiceManager_.claimReleaseSlot(releaseBlock);
+    }
 }
 
 void Synth::Impl::checkOffGroups(const Region* region, int delay, int number, bool chokedByCC)
@@ -1891,6 +1911,18 @@ void Synth::setReleaseVoicesYield(bool yield) noexcept
 {
     Impl& impl = *impl_;
     impl.voiceManager_.setReleaseVoicesYield(yield);
+}
+
+void Synth::setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept
+{
+    Impl& impl = *impl_;
+    impl.voiceManager_.setReleaseStartBudget(perBlock, maxBlocksLate);
+}
+
+uint64_t Synth::getNumSkippedReleaseVoices() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getNumSkippedReleaseVoices();
 }
 
 bool Synth::getReleaseVoicesYield() const noexcept

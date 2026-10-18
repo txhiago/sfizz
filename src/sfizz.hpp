@@ -306,6 +306,28 @@ public:
     bool getReleaseVoicesYield() const noexcept;
 
     /**
+     * @brief Start at most `perBlock` release-triggered voices (`trigger=release`,
+     * anything a note-off starts) in one block (StageKeys #156).
+     *
+     * Releasing a chord of a piano with a release layer starts hundreds of
+     * voices at once, more than a phone's callback can begin in one block. The
+     * first `perBlock` start where the note-off arrived, the next `perBlock` one
+     * block later (samplesPerBlock frames), and so on; one that would start more
+     * than `maxBlocksLate` blocks late is skipped. The schedule is a function of
+     * the notes played, never of the load, so the same lifted pedal sounds the
+     * same every time. 0 (the default) starts every release at once, as sfizz does.
+     *
+     * @par Thread-safety constraints
+     * - @b CT: the function must be invoked from the Control thread
+     */
+    void setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept;
+
+    /**
+     * @brief Release voices skipped by the budget since the synth was built.
+     */
+    uint64_t getNumSkippedReleaseVoices() const noexcept;
+
+    /**
      * @brief Number of <effect> headers the last load skipped. Zero when
      * effects are enabled.
      */

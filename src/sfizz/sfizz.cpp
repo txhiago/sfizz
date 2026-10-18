@@ -125,6 +125,16 @@ void sfz::Sfizz::setReleaseVoicesYield(bool yield) noexcept
     synth->synth.setReleaseVoicesYield(yield);
 }
 
+void sfz::Sfizz::setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept
+{
+    synth->synth.setReleaseStartBudget(perBlock, maxBlocksLate);
+}
+
+uint64_t sfz::Sfizz::getNumSkippedReleaseVoices() const noexcept
+{
+    return synth->synth.getNumSkippedReleaseVoices();
+}
+
 bool sfz::Sfizz::getReleaseVoicesYield() const noexcept
 {
     return synth->synth.getReleaseVoicesYield();

@@ -8,6 +8,8 @@
 #include "SisterVoiceRing.h"
 #include "RegionSet.h"
 #include <absl/algorithm/container.h>
+#include <algorithm>
+#include <iterator>
 
 namespace sfz {
 
@@ -326,6 +328,40 @@ bool VoiceManager::checkEnginePolyphony(int delay, bool releaseVoice) noexcept
         absl::MakeSpan(activeVoices_), numRequiredVoices_);
     stealForEngine(candidate, delay);
     return true;
+}
+
+void VoiceManager::setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept
+{
+    releaseStartsPerBlock_ = perBlock;
+    releaseBlocksLate_ = std::min(maxBlocksLate, maxReleaseBlocksLate);
+    std::fill(std::begin(releaseSlots_), std::end(releaseSlots_), uint16_t { 0 });
+}
+
+int VoiceManager::findReleaseSlot() const noexcept
+{
+    // StageKeys: a fixed schedule, the same for the same playing, never read
+    // from the load. The first block with room takes the start; past the limit
+    // the release sample is not worth being late for.
+    for (unsigned b = 0; b <= releaseBlocksLate_; ++b) {
+        if (releaseSlots_[b] < releaseStartsPerBlock_)
+            return static_cast<int>(b);
+    }
+    return -1;
+}
+
+void VoiceManager::claimReleaseSlot(int block) noexcept
+{
+    if (block >= 0 && static_cast<unsigned>(block) <= maxReleaseBlocksLate)
+        ++releaseSlots_[block];
+}
+
+void VoiceManager::advanceReleaseSchedule() noexcept
+{
+    if (releaseStartsPerBlock_ == 0)
+        return;
+    for (unsigned b = 0; b < maxReleaseBlocksLate; ++b)
+        releaseSlots_[b] = releaseSlots_[b + 1];
+    releaseSlots_[maxReleaseBlocksLate] = 0;
 }
 
 void VoiceManager::stealForEngine(Voice* voice, int delay) noexcept

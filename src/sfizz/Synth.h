@@ -289,6 +289,12 @@ public:
     void setReleaseVoicesYield(bool yield) noexcept;
     bool getReleaseVoicesYield() const noexcept;
     /**
+     * @brief Budget release-triggered voices per block; see
+     * sfz::Sfizz::setReleaseStartBudget.
+     */
+    void setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept;
+    uint64_t getNumSkippedReleaseVoices() const noexcept;
+    /**
      * @brief Number of <effect> headers skipped by the last load.
      */
     int getNumIgnoredEffects() const noexcept;

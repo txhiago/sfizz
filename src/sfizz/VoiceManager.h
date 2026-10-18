@@ -119,6 +119,25 @@ struct VoiceManager final : public Voice::StateListener
     bool getReleaseVoicesYield() const noexcept { return releaseVoicesYield_; }
 
     /**
+     * @brief Budget the release-triggered voices (note-off, `trigger=release`)
+     * that start in one block. See sfz::Sfizz::setReleaseStartBudget.
+     */
+    void setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept;
+    bool releaseStartBudgeted() const noexcept { return releaseStartsPerBlock_ != 0; }
+    /**
+     * @brief The earliest block, counted from the one being dispatched, that
+     * still has a release start free, or -1 when every block within the limit
+     * is full (the release voice is skipped). Claims nothing.
+     */
+    int findReleaseSlot() const noexcept;
+    /** @brief Claim a start in that block, once a voice has taken it. */
+    void claimReleaseSlot(int block) noexcept;
+    void skipReleaseVoice() noexcept { skippedReleases_.fetch_add(1, std::memory_order_relaxed); }
+    /** @brief The block being dispatched has been rendered: the schedule moves on. */
+    void advanceReleaseSchedule() noexcept;
+    uint64_t getNumSkippedReleaseVoices() const noexcept { return skippedReleases_.load(std::memory_order_relaxed); }
+
+    /**
      * @brief Voices cut to make room at the engine's polyphony limit since this
      * manager was built. See sfz::Sfizz::getNumStolenVoices. Any thread.
      */
@@ -169,6 +188,13 @@ private:
     bool releaseVoicesYield_ { false };
     // Written by the thread that renders, read by any: relaxed, a count.
     std::atomic<uint64_t> stolenVoices_ { 0 };
+    std::atomic<uint64_t> skippedReleases_ { 0 };
+    // Release starts per block, 0 = no budget. releaseSlots_[b] counts the starts
+    // already placed b blocks after the one being dispatched.
+    static constexpr unsigned maxReleaseBlocksLate = 15;
+    unsigned releaseStartsPerBlock_ { 0 };
+    unsigned releaseBlocksLate_ { 0 };
+    uint16_t releaseSlots_[maxReleaseBlocksLate + 1] {};
     std::vector<Voice> list_;
     std::vector<Voice*> activeVoices_;
     std::vector<Voice*> temp_;
