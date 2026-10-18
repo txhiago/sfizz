@@ -355,8 +355,14 @@ void VoiceManager::claimReleaseSlot(int block) noexcept
         ++releaseSlots_[block];
 }
 
-void VoiceManager::advanceReleaseSchedule() noexcept
+void VoiceManager::clearReleaseSchedule() noexcept
 {
+    std::fill(std::begin(releaseSlots_), std::end(releaseSlots_), uint16_t { 0 });
+}
+
+void VoiceManager::advanceReleaseSchedule(int frames) noexcept
+{
+    releaseStepFrames_ = frames;
     if (releaseStartsPerBlock_ == 0)
         return;
     for (unsigned b = 0; b < maxReleaseBlocksLate; ++b)

@@ -133,8 +133,16 @@ struct VoiceManager final : public Voice::StateListener
     /** @brief Claim a start in that block, once a voice has taken it. */
     void claimReleaseSlot(int block) noexcept;
     void skipReleaseVoice() noexcept { skippedReleases_.fetch_add(1, std::memory_order_relaxed); }
-    /** @brief The block being dispatched has been rendered: the schedule moves on. */
-    void advanceReleaseSchedule() noexcept;
+    /**
+     * @brief The block being dispatched has been rendered, `frames` long: the
+     * schedule moves on, and the next blocks are taken to be as long. The step
+     * is the callback's, not the buffer capacity the host prepared with.
+     */
+    void advanceReleaseSchedule(int frames) noexcept;
+    /** @brief Frames between one schedule slot and the next; 0 until a block has rendered. */
+    int releaseStepFrames() const noexcept { return releaseStepFrames_; }
+    /** @brief Forget the schedule: nothing is waiting to start. */
+    void clearReleaseSchedule() noexcept;
     uint64_t getNumSkippedReleaseVoices() const noexcept { return skippedReleases_.load(std::memory_order_relaxed); }
 
     /**
@@ -194,6 +202,7 @@ private:
     static constexpr unsigned maxReleaseBlocksLate = 15;
     unsigned releaseStartsPerBlock_ { 0 };
     unsigned releaseBlocksLate_ { 0 };
+    int releaseStepFrames_ { 0 };
     uint16_t releaseSlots_[maxReleaseBlocksLate + 1] {};
     std::vector<Voice> list_;
     std::vector<Voice*> activeVoices_;

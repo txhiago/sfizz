@@ -1213,7 +1213,7 @@ void Synth::renderBlock(AudioSpan<float> buffer) noexcept
     }
 
     // The block just rendered took the starts placed in it; the schedule moves on.
-    impl.voiceManager_.advanceReleaseSchedule();
+    impl.voiceManager_.advanceReleaseSchedule(static_cast<int>(numFrames));
 
     { // Apply effect buses
         // -- note(jpc) there is always a "main" bus which is initially empty.
@@ -1346,7 +1346,10 @@ void Synth::Impl::startVoice(Layer* layer, int delay, const TriggerEvent& trigge
         return;
 
     selectedVoice->reset();
-    const int startDelay = delay + releaseBlock * samplesPerBlock_;
+    // One slot is one callback: the frames the host last rendered, whatever buffer
+    // capacity it prepared the synth with.
+    const int step = voiceManager_.releaseStepFrames() > 0 ? voiceManager_.releaseStepFrames() : samplesPerBlock_;
+    const int startDelay = delay + releaseBlock * step;
     if (selectedVoice->startVoice(layer, startDelay, triggerEvent)) {
         ring.addVoiceToRing(selectedVoice);
         if (budgeted)
@@ -2269,6 +2272,7 @@ void Synth::allSoundOff() noexcept
     Impl& impl = *impl_;
     for (auto& voice : impl.voiceManager_)
         voice.reset();
+    impl.voiceManager_.clearReleaseSchedule();
     for (int i = 0; i < impl.numOutputs_; ++i) {
         for (auto& effectBus : impl.getEffectBusesForOutput(i))
             if (effectBus)
