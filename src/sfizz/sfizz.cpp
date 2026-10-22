@@ -135,6 +135,11 @@ uint64_t sfz::Sfizz::getNumSkippedReleaseVoices() const noexcept
     return synth->synth.getNumSkippedReleaseVoices();
 }
 
+uint64_t sfz::Sfizz::getNumFailedVoiceStarts() const noexcept
+{
+    return synth->synth.getNumFailedVoiceStarts();
+}
+
 bool sfz::Sfizz::getReleaseVoicesYield() const noexcept
 {
     return synth->synth.getReleaseVoicesYield();

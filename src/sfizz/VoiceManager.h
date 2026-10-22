@@ -144,6 +144,9 @@ struct VoiceManager final : public Voice::StateListener
     /** @brief Forget the schedule: nothing is waiting to start. */
     void clearReleaseSchedule() noexcept;
     uint64_t getNumSkippedReleaseVoices() const noexcept { return skippedReleases_.load(std::memory_order_relaxed); }
+    /** @brief A voice could not start: its sample's data was not to be had. */
+    void failVoiceStart() noexcept { failedStarts_.fetch_add(1, std::memory_order_relaxed); }
+    uint64_t getNumFailedVoiceStarts() const noexcept { return failedStarts_.load(std::memory_order_relaxed); }
 
     /**
      * @brief Voices cut to make room at the engine's polyphony limit since this
@@ -197,6 +200,8 @@ private:
     // Written by the thread that renders, read by any: relaxed, a count.
     std::atomic<uint64_t> stolenVoices_ { 0 };
     std::atomic<uint64_t> skippedReleases_ { 0 };
+    // Written by the thread that dispatches notes, read by any: relaxed, a count.
+    std::atomic<uint64_t> failedStarts_ { 0 };
     // Release starts per block, 0 = no budget. releaseSlots_[b] counts the starts
     // already placed b blocks after the one being dispatched.
     static constexpr unsigned maxReleaseBlocksLate = 15;

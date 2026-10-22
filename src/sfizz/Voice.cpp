@@ -916,6 +916,17 @@ void Voice::Impl::amplitudeEnvelope(absl::Span<float> modulationSpan) noexcept
     // Amplitude EG
     absl::Span<const float> ampegOut(mm.getModulation(masterAmplitudeTarget_), numSamples);
     ASSERT(ampegOut.data());
+    // StageKeys: silence rather than a segfault on the rendering thread if a
+    // voice ever renders without its envelope - a target of another region, or
+    // none, as a failed start left one before Synth::Impl::startVoice freed it
+    // (StageKeys #121). Every other target here is already read as optional.
+    // Its envelope will never advance, so the voice is also let go, not left
+    // holding a slot in silence.
+    if (ampegOut.data() == nullptr) {
+        fill<float>(modulationSpan, 0.0f);
+        switchState(State::cleanMeUp);
+        return;
+    }
     copy(ampegOut, modulationSpan);
 
     // Amplitude envelope

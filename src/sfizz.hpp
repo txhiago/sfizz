@@ -328,6 +328,14 @@ public:
     uint64_t getNumSkippedReleaseVoices() const noexcept;
 
     /**
+     * @brief Voices that could not start since the synth was built: the note
+     * found its region but not its sample's data - the background loader's
+     * queue was full, or the sample was not preloaded. The note does not
+     * sound. Any thread.
+     */
+    uint64_t getNumFailedVoiceStarts() const noexcept;
+
+    /**
      * @brief Number of <effect> headers the last load skipped. Zero when
      * effects are enabled.
      */

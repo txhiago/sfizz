@@ -295,6 +295,11 @@ public:
     void setReleaseStartBudget(unsigned perBlock, unsigned maxBlocksLate) noexcept;
     uint64_t getNumSkippedReleaseVoices() const noexcept;
     /**
+     * @brief Voices that could not start since the synth was built; see
+     * sfz::Sfizz::getNumFailedVoiceStarts.
+     */
+    uint64_t getNumFailedVoiceStarts() const noexcept;
+    /**
      * @brief Number of <effect> headers skipped by the last load.
      */
     int getNumIgnoredEffects() const noexcept;

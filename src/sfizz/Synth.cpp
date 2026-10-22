@@ -1354,6 +1354,18 @@ void Synth::Impl::startVoice(Layer* layer, int delay, const TriggerEvent& trigge
         ring.addVoiceToRing(selectedVoice);
         if (budgeted)
             voiceManager_.claimReleaseSlot(releaseBlock);
+    } else {
+        // StageKeys: a start that found no file promise - the loader's queue full,
+        // or the sample not preloaded - left the voice waiting to be cleaned up
+        // with its new region but the modulation targets of whatever it played
+        // before, or none: they are saved last in startVoice(). Rendered so, its
+        // amplitude envelope read a null buffer and the render segfaulted
+        // (StageKeys #121). Freed here, it is never rendered and is free for the
+        // next start. A disabled region also returns false, but renders nothing
+        // and is the file's own choice: freed, not counted.
+        if (!region.disabled())
+            voiceManager_.failVoiceStart();
+        selectedVoice->reset();
     }
 }
 
@@ -1926,6 +1938,12 @@ uint64_t Synth::getNumSkippedReleaseVoices() const noexcept
 {
     Impl& impl = *impl_;
     return impl.voiceManager_.getNumSkippedReleaseVoices();
+}
+
+uint64_t Synth::getNumFailedVoiceStarts() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getNumFailedVoiceStarts();
 }
 
 bool Synth::getReleaseVoicesYield() const noexcept
