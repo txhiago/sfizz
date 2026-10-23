@@ -79,6 +79,18 @@ public:
      */
     void process(absl::Span<float> out);
 
+    /**
+       Move the oscillator on by a number of frames as process() would - its
+       delay, its fade-in and the phase of each subwaveform - without computing
+       a wave nobody reads (StageKeys #163).
+
+       Exact only where the phase is a function of the frames alone: no rate,
+       beats or phase modulation, no beat clock, and no sample-and-hold, whose
+       held value changes as the phase passes through a cycle. Returns false,
+       having changed nothing, otherwise; the caller then processes the cycle.
+     */
+    bool advance(size_t numFrames);
+
 private:
     /**
        Evaluate the wave at a given phase.

@@ -15,8 +15,14 @@ public:
     explicit LFOSource(VoiceManager &manager);
     void init(const ModKey& sourceKey, NumericId<Voice> voiceId, unsigned delay) override;
     void generate(const ModKey& sourceKey, NumericId<Voice> voiceId, absl::Span<float> buffer) override;
+    // Moves the LFO on without computing its wave where it can (LFO::advance),
+    // so one nobody reads this cycle - every depth it has at zero - costs
+    // nearly nothing and still keeps its delay and phase (StageKeys #163).
+    void generateDiscarded(const ModKey& sourceKey, NumericId<Voice> voiceId, absl::Span<float> buffer) override;
 
 private:
+    LFO* find(const ModKey& sourceKey, NumericId<Voice> voiceId) const;
+
     VoiceManager& voiceManager_;
 };
 

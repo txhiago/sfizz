@@ -383,6 +383,15 @@ void ModMatrix::endVoice()
     impl.currentVoiceTriggerValue_ = 0.0f;
 }
 
+static bool allZero(const float* values, uint32_t count) noexcept
+{
+    for (uint32_t i = 0; i < count; ++i) {
+        if (values[i] != 0.0f)
+            return false;
+    }
+    return true;
+}
+
 float* ModMatrix::getModulation(TargetId targetId)
 {
     if (!validTarget(targetId))
@@ -425,6 +434,28 @@ float* ModMatrix::getModulation(TargetId targetId)
         if (sourceFlags & kModIsPerVoice)
             useThisSource = (regionId == source.key.region());
 
+        float sourceDepth = sourcesPos->second.sourceDepth_;
+        const float* sourceDepthMod = nullptr;
+        if (useThisSource) {
+            if (sourceFlags & kModIsPerVoice) {
+                const float velToDepth = sourcesPos->second.velToDepth_;
+                sourceDepth += triggerValue * velToDepth;
+            }
+            sourceDepthMod = getModulation(sourcesPos->second.sourceDepthModId_);
+
+            // A connection that adds nothing for the whole cycle - a depth of
+            // zero, and its controllers at rest - leaves its source alone: an
+            // SF2's mod wheel vibrato, written into every region, would
+            // otherwise compute an LFO for every voice of every block while
+            // the wheel never moves (StageKeys #163). A source nothing else
+            // reads is moved on by generateDiscarded() at the voice's end, so
+            // its delay and phase run as if it had been generated. Additive
+            // targets only: on a multiplicative one a depth of zero is a gain
+            // of zero, not nothing.
+            useThisSource = !((targetFlags & kModIsAdditive) && sourceDepth == 0.0f &&
+                (!sourceDepthMod || allZero(sourceDepthMod, numFrames)));
+        }
+
         if (useThisSource) {
             absl::Span<float> sourceBuffer(source.buffer.data(), numFrames);
 
@@ -433,14 +464,6 @@ float* ModMatrix::getModulation(TargetId targetId)
                 source.gen->generate(source.key, impl.currentVoiceId_, sourceBuffer);
                 source.bufferReady = true;
             }
-
-            float sourceDepth = sourcesPos->second.sourceDepth_;
-            if (sourceFlags & kModIsPerVoice) {
-                const float velToDepth = sourcesPos->second.velToDepth_;
-                sourceDepth += triggerValue * velToDepth;
-            }
-
-            const float* sourceDepthMod = getModulation(sourcesPos->second.sourceDepthModId_);
 
             if (isFirstSource) {
                 if (sourceDepth == 1 && !sourceDepthMod)

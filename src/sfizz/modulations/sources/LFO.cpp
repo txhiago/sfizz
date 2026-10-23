@@ -64,46 +64,56 @@ void LFOSource::init(const ModKey& sourceKey, NumericId<Voice> voiceId, unsigned
     lfo->start(delay);
 }
 
-void LFOSource::generate(const ModKey& sourceKey, NumericId<Voice> voiceId, absl::Span<float> buffer)
+LFO* LFOSource::find(const ModKey& sourceKey, NumericId<Voice> voiceId) const
 {
     const unsigned lfoIndex = sourceKey.parameters().N;
 
     Voice* voice = voiceManager_.getVoiceById(voiceId);
     if (!voice) {
         ASSERTFALSE;
+        return nullptr;
+    }
+
+    const Region* region = voice->getRegion();
+
+    switch (sourceKey.id()) {
+    case ModId::AmpLFO:
+        return voice->getAmplitudeLFO();
+    case ModId::PitchLFO:
+        return voice->getPitchLFO();
+    case ModId::FilLFO:
+        return voice->getFilterLFO();
+    case ModId::LFO:
+        if (lfoIndex >= region->lfos.size()) {
+            ASSERTFALSE;
+            return nullptr;
+        }
+        return voice->getLFO(lfoIndex);
+    default:
+        ASSERTFALSE;
+        return nullptr;
+    }
+}
+
+void LFOSource::generate(const ModKey& sourceKey, NumericId<Voice> voiceId, absl::Span<float> buffer)
+{
+    LFO* lfo = find(sourceKey, voiceId);
+    if (!lfo) {
         fill(buffer, 0.0f);
         return;
     }
 
-    const Region* region = voice->getRegion();
-    LFO* lfo = nullptr;
-
-    switch (sourceKey.id()) {
-    case ModId::AmpLFO:
-        lfo = voice->getAmplitudeLFO();
-        break;
-    case ModId::PitchLFO:
-        lfo = voice->getPitchLFO();
-        break;
-    case ModId::FilLFO:
-        lfo = voice->getFilterLFO();
-        break;
-    case ModId::LFO:
-        {
-            if (lfoIndex >= region->lfos.size()) {
-                ASSERTFALSE;
-                fill(buffer, 0.0f);
-                return;
-            }
-            lfo = voice->getLFO(lfoIndex);
-        }
-        break;
-    default:
-        ASSERTFALSE;
-        return;
-    }
-
     lfo->process(buffer);
+}
+
+void LFOSource::generateDiscarded(const ModKey& sourceKey, NumericId<Voice> voiceId, absl::Span<float> buffer)
+{
+    LFO* lfo = find(sourceKey, voiceId);
+    if (!lfo)
+        return;
+
+    if (!lfo->advance(buffer.size()))
+        lfo->process(buffer);
 }
 
 } // namespace sfz
