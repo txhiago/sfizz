@@ -303,6 +303,41 @@ void LFO::process(absl::Span<float> out)
     processFadeIn(out);
 }
 
+bool LFO::advance(size_t numFrames)
+{
+    Impl& impl = *impl_;
+    const LFODescription& desc = *impl.desc_;
+
+    if (impl.beatsKeyId || impl.freqKeyId || impl.phaseKeyId)
+        return false;
+    if (impl.resources_.getBeatClock().isPlaying() && desc.beats > 0)
+        return false;
+    for (const LFODescription::Sub& sub : desc.sub) {
+        if (sub.wave == LFOWave::RandomSH)
+            return false;
+    }
+
+    const size_t skipFrames = std::min(numFrames, impl.delayFramesLeft_);
+    impl.delayFramesLeft_ -= skipFrames;
+    numFrames -= skipFrames;
+    if (numFrames == 0 || desc.sub.empty())
+        return true;
+
+    // The phase generatePhase() leaves after numFrames frames, for every
+    // subwaveform: the step sequencer reads the first sub's.
+    const float samplePeriod = 1.0f / impl.sampleRate_;
+    for (size_t nth = 0; nth < desc.sub.size(); ++nth) {
+        const float incr = desc.sub[nth].ratio * samplePeriod * desc.freq;
+        impl.subPhases_[nth] = wrapPhase(impl.subPhases_[nth] + static_cast<float>(numFrames) * incr);
+    }
+
+    if (impl.fadePosition_ < 1.0f) {
+        const float fadeStep = samplePeriod / impl.fadeTime_;
+        impl.fadePosition_ = std::min(1.0f, impl.fadePosition_ + static_cast<float>(numFrames) * fadeStep);
+    }
+    return true;
+}
+
 void LFO::processFadeIn(absl::Span<float> out)
 {
     Impl& impl = *impl_;
@@ -375,11 +410,15 @@ void LFO::generatePhase(unsigned nth, absl::Span<float> phases)
     else {
         // generate using the frequency
         if (!freqMod) {
-            float incr = ratio * samplePeriod * baseFreq;
-            for (size_t i = 0; i < numFrames; ++i) {
-                phases[i] = phase;
-                phase = wrapPhase(phase + incr);
-            }
+            // Each frame's phase from the block's first, not from the frame
+            // before it: no loop-carried dependency, so the loop vectorizes,
+            // where wrapping each frame into the next kept one conversion per
+            // frame in series, the costliest step of a voice with an LFO on
+            // the phone (StageKeys #163). Wrapped below, with the offset.
+            const float incr = ratio * samplePeriod * baseFreq;
+            for (size_t i = 0; i < numFrames; ++i)
+                phases[i] = phase + static_cast<float>(i) * incr;
+            phase = wrapPhase(phase + static_cast<float>(numFrames) * incr);
         }
         else {
             for (size_t i = 0; i < numFrames; ++i) {
