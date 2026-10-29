@@ -34,6 +34,9 @@
 #include <algorithm>
 #include <utility>
 #include <atomic>
+#if !defined(_WIN32)
+#include <sys/mman.h>
+#endif
 
 #ifdef DEBUG
 #include <iostream>
@@ -98,6 +101,42 @@ private:
 
 
 /**
+ * @brief      Where a Buffer's memory comes from: the heap, zero-filled, as
+ *             sfizz always allocated it. Its memory cannot be locked.
+ */
+struct HeapAllocator {
+    static void* allocate(size_t bytes) noexcept { return std::calloc(bytes, 1); }
+    static void release(void* p, size_t) noexcept { std::free(p); }
+    static bool lock(void*, size_t) noexcept { return false; }
+};
+
+/**
+ * @brief      Where a Buffer's memory comes from: pages of its own, mapped
+ *             for it alone and zero-filled, so that they can be locked in
+ *             memory without locking a neighbor's (mlock works by the page,
+ *             and does not count), and are unlocked when they are unmapped.
+ *             For sample data the rendering thread reads (StageKeys #221):
+ *             the kernel may otherwise swap it out, and the rendering
+ *             thread then waits for it to come back. Where pages cannot be
+ *             mapped or locked, it falls back to the heap.
+ */
+struct PageAllocator {
+#if defined(_WIN32)
+    static void* allocate(size_t bytes) noexcept { return std::calloc(bytes, 1); }
+    static void release(void* p, size_t) noexcept { std::free(p); }
+    static bool lock(void*, size_t) noexcept { return false; }
+#else
+    static void* allocate(size_t bytes) noexcept
+    {
+        void* p = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        return p == MAP_FAILED ? nullptr : p;
+    }
+    static void release(void* p, size_t bytes) noexcept { munmap(p, bytes); }
+    static bool lock(void* p, size_t bytes) noexcept { return mlock(p, bytes) == 0; }
+#endif
+};
+
+/**
  * @brief      A heap buffer structure that tries to align its beginning and
  *             adds a small offset at the end for alignment too.
  *
@@ -110,8 +149,10 @@ private:
  * @tparam     Type       The buffer type
  * @tparam     Alignment  the required alignment in bytes (defaults to
  *                        config::defaultAlignment)
+ * @tparam     Allocator  where the memory comes from (HeapAllocator, or
+ *                        PageAllocator for memory that can be locked)
  */
-template <class Type, unsigned int Alignment = config::defaultAlignment>
+template <class Type, unsigned int Alignment = config::defaultAlignment, class Allocator = HeapAllocator>
 class Buffer {
 public:
     using value_type = typename std::remove_cv<Type>::type;
@@ -161,12 +202,16 @@ public:
         Type* oldData = paddedData.get();
         Type* oldNormalData = normalData;
         std::size_t oldSize = alignedSize;
+        std::size_t oldBytes = paddedData.get_deleter().bytes;
 
         std::size_t tempSize = newSize + 2 * AlignmentMask; // To ensure that we have leeway at the beginning and at the end
-        Type* newData = reinterpret_cast<Type*>(std::calloc(tempSize, sizeof(value_type)));
+        Type* newData = reinterpret_cast<Type*>(Allocator::allocate(tempSize * sizeof(value_type)));
         if (newData == nullptr) {
             return false;
         }
+        // Memory that was locked stays locked when it moves.
+        if (locked)
+            locked = Allocator::lock(newData, tempSize * sizeof(value_type));
 
         if (largerSize > 0)
             counter().bufferResized(largerSize * sizeof(value_type), tempSize * sizeof(value_type));
@@ -177,6 +222,7 @@ public:
         alignedSize = newSize;
         paddedData.release(); // realloc has invalidated the old pointer
         paddedData.reset(static_cast<pointer>(newData));
+        paddedData.get_deleter().bytes = tempSize * sizeof(value_type);
         normalData = static_cast<pointer>(align(Alignment, alignedSize, newData, tempSize));
         normalEnd = normalData + alignedSize;
         std::size_t endMisalignment = (alignedSize & TypeAlignmentMask);
@@ -189,7 +235,8 @@ public:
         // null: memcpy's arguments must be valid pointers even for a zero size.
         if (oldNormalData != nullptr)
             std::memcpy(normalData, oldNormalData, std::min(newSize, oldSize) * sizeof(Type));
-        std::free(oldData);
+        if (oldData != nullptr)
+            Allocator::release(oldData, oldBytes);
 
         return true;
     }
@@ -223,6 +270,21 @@ public:
     }
 
     /**
+     * @brief Locks the buffer's memory, so that it is never swapped out, until
+     * it is freed. Only a PageAllocator's memory can be locked; a buffer
+     * resized later stays locked.
+     *
+     * @return true if the memory is locked (an empty buffer is, trivially)
+     */
+    bool lockInMemory() noexcept
+    {
+        if (!paddedData)
+            return true;
+        locked = Allocator::lock(paddedData.get(), paddedData.get_deleter().bytes);
+        return locked;
+    }
+
+    /**
      * @brief Get the size of the larger block which is actually allocated
      */
     size_t allocationSize() const noexcept
@@ -235,7 +297,7 @@ public:
      *
      * @param other
      */
-    Buffer(const Buffer<Type, Alignment>& other)
+    Buffer(const Buffer& other)
     {
         resize(other.size());
         if (other.size() != 0) // an empty buffer's data() is null
@@ -247,18 +309,19 @@ public:
      *
      * @param other
      */
-    Buffer(Buffer<Type, Alignment>&& other) noexcept
+    Buffer(Buffer&& other) noexcept
         : largerSize(other.largerSize),
           alignedSize(other.alignedSize),
           normalData(other.normalData),
           paddedData(std::move(other.paddedData)),
           normalEnd(other.normalEnd),
-          _alignedEnd(other._alignedEnd)
+          _alignedEnd(other._alignedEnd),
+          locked(other.locked)
     {
         other._clear();
     }
 
-    Buffer<Type, Alignment>& operator=(const Buffer<Type, Alignment>& other)
+    Buffer& operator=(const Buffer& other)
     {
         if (this != &other) {
             resize(other.size());
@@ -268,7 +331,7 @@ public:
         return *this;
     }
 
-    Buffer<Type, Alignment>& operator=(Buffer<Type, Alignment>&& other) noexcept
+    Buffer& operator=(Buffer&& other) noexcept
     {
         if (this != &other) {
             if (largerSize > 0)
@@ -279,6 +342,7 @@ public:
             paddedData = std::move(other.paddedData);
             normalEnd = other.normalEnd;
             _alignedEnd = other._alignedEnd;
+            locked = other.locked;
             other._clear();
         }
         return *this;
@@ -308,9 +372,11 @@ private:
         largerSize = 0;
         alignedSize = 0;
         paddedData.reset();
+        paddedData.get_deleter().bytes = 0;
         normalData = nullptr;
         normalEnd = nullptr;
         _alignedEnd = nullptr;
+        locked = false;
     }
 
 private:
@@ -331,8 +397,10 @@ private:
         return reinterpret_cast<void *>(aligned);
     }
 
+    // Unmapping needs the size, which free() does not: the deleter carries it.
     struct deleter {
-        void operator()(void *p) const noexcept { std::free(p); }
+        size_t bytes { 0 };
+        void operator()(void *p) const noexcept { Allocator::release(p, bytes); }
     };
 
     size_type largerSize { 0 };
@@ -341,6 +409,7 @@ private:
     std::unique_ptr<value_type[], deleter> paddedData;
     pointer normalEnd { nullptr };
     pointer _alignedEnd { nullptr };
+    bool locked { false };
     LEAK_DETECTOR(Buffer);
 };
 

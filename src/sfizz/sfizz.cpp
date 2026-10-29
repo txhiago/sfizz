@@ -140,6 +140,21 @@ uint64_t sfz::Sfizz::getNumFailedVoiceStarts() const noexcept
     return synth->synth.getNumFailedVoiceStarts();
 }
 
+void sfz::Sfizz::setSampleLocking(bool lock) noexcept
+{
+    synth->synth.setSampleLocking(lock);
+}
+
+bool sfz::Sfizz::getSampleLocking() const noexcept
+{
+    return synth->synth.getSampleLocking();
+}
+
+uint64_t sfz::Sfizz::getNumSampleLockFailures() const noexcept
+{
+    return synth->synth.getNumSampleLockFailures();
+}
+
 bool sfz::Sfizz::getReleaseVoicesYield() const noexcept
 {
     return synth->synth.getReleaseVoicesYield();

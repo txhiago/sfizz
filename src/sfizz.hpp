@@ -336,6 +336,38 @@ public:
     uint64_t getNumFailedVoiceStarts() const noexcept;
 
     /**
+     * @brief Lock in memory the sample data the rendering thread plays without
+     * the background loader (off by default: upstream behavior).
+     *
+     * That is the preloaded start of every sample, and every file loaded whole.
+     * Under memory pressure the kernel otherwise swaps it out, compressed on
+     * Android, and a note that has not played for a while waits for its data
+     * to come back on the rendering thread - which is how a phone's callback
+     * misses its deadline while another instrument loads (StageKeys #221). A
+     * file streamed past its preload is not locked: it is read moments before
+     * it plays, and can be most of an instrument. Each buffer is mapped pages of
+     * its own, so a lock never reaches a neighbor's memory, and is undone when
+     * the buffer is freed. A buffer the system refuses to lock (a memory-lock
+     * limit) plays unlocked, as before, and is counted. Applies to the data
+     * read from then on: set it before loading.
+     *
+     * @par Thread-safety constraints
+     * - @b CT: the function must be invoked from the Control thread
+     */
+    void setSampleLocking(bool lock) noexcept;
+
+    /**
+     * @brief Whether sample data is locked in memory as it is read.
+     */
+    bool getSampleLocking() const noexcept;
+
+    /**
+     * @brief Sample buffers that could not be locked since the synth was
+     * built. Any thread.
+     */
+    uint64_t getNumSampleLockFailures() const noexcept;
+
+    /**
      * @brief Number of <effect> headers the last load skipped. Zero when
      * effects are enabled.
      */

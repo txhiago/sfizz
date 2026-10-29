@@ -300,6 +300,13 @@ public:
      */
     uint64_t getNumFailedVoiceStarts() const noexcept;
     /**
+     * @brief Lock in memory the sample data played without the loader; see
+     * sfz::Sfizz::setSampleLocking.
+     */
+    void setSampleLocking(bool lock) noexcept;
+    bool getSampleLocking() const noexcept;
+    uint64_t getNumSampleLockFailures() const noexcept;
+    /**
      * @brief Number of <effect> headers skipped by the last load.
      */
     int getNumIgnoredEffects() const noexcept;

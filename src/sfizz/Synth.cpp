@@ -1946,6 +1946,24 @@ uint64_t Synth::getNumFailedVoiceStarts() const noexcept
     return impl.voiceManager_.getNumFailedVoiceStarts();
 }
 
+void Synth::setSampleLocking(bool lock) noexcept
+{
+    Impl& impl = *impl_;
+    impl.resources_.getFilePool().setSampleLocking(lock);
+}
+
+bool Synth::getSampleLocking() const noexcept
+{
+    const Impl& impl = *impl_;
+    return impl.resources_.getFilePool().getSampleLocking();
+}
+
+uint64_t Synth::getNumSampleLockFailures() const noexcept
+{
+    const Impl& impl = *impl_;
+    return impl.resources_.getFilePool().getNumSampleLockFailures();
+}
+
 bool Synth::getReleaseVoicesYield() const noexcept
 {
     Impl& impl = *impl_;

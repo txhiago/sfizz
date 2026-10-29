@@ -98,7 +98,7 @@ sfz::FileAudioBuffer readFromFile(sfz::AudioReader& reader, uint32_t numFrames)
     return baseBuffer;
 }
 
-void streamFromFile(sfz::AudioReader& reader, sfz::FileAudioBuffer& output, std::atomic<size_t>* filledFrames = nullptr)
+void streamFromFile(sfz::AudioReader& reader, sfz::StreamedAudioBuffer& output, std::atomic<size_t>* filledFrames = nullptr)
 {
     const auto numFrames = static_cast<size_t>(reader.frames());
     const auto numChannels = reader.channels();
@@ -338,6 +338,7 @@ bool sfz::FilePool::preloadFile(const FileId& fileId, uint32_t maxOffset) noexce
             fileData.information.maxOffset = maxOffset;
             fileData.preloadedData = readFromFile(*reader, framesToLoad);
             fileData.fullyLoaded = frames == framesToLoad;
+            holdInMemory(fileData.preloadedData);
         }
         fileData.preloadCallCount++;
     } else {
@@ -350,6 +351,7 @@ bool sfz::FilePool::preloadFile(const FileId& fileId, uint32_t maxOffset) noexce
         insertedPair.first->second.preloadCallCount++;
         insertedPair.first->second.status = FileData::Status::Preloaded;
         insertedPair.first->second.fullyLoaded = framesToLoad == frames;
+        holdInMemory(insertedPair.first->second.preloadedData);
     }
 
     return true;
@@ -406,6 +408,7 @@ sfz::FileDataHolder sfz::FilePool::loadFile(const FileId& fileId) noexcept
     insertedPair.first->second.preloadCallCount++;
     insertedPair.first->second.status = FileData::Status::Preloaded;
     insertedPair.first->second.fullyLoaded = true;
+    holdInMemory(insertedPair.first->second.preloadedData);
     return { &insertedPair.first->second };
 }
 
@@ -425,6 +428,7 @@ sfz::FileDataHolder sfz::FilePool::loadFromRam(const FileId& fileId, const std::
     insertedPair.first->second.preloadCallCount++;
     insertedPair.first->second.status = FileData::Status::Preloaded;
     insertedPair.first->second.fullyLoaded = true;
+    holdInMemory(insertedPair.first->second.preloadedData);
     DBG("Added a file " << fileId.filename());
     return { &insertedPair.first->second };
 }
@@ -474,6 +478,7 @@ void sfz::FilePool::setPreloadSize(uint32_t preloadSize) noexcept
         const auto framesToLoad = min(frames, maxOffset + preloadSize);
         fileData.preloadedData = readFromFile(*reader, static_cast<uint32_t>(framesToLoad));
         fileData.fullyLoaded = frames == framesToLoad;
+        holdInMemory(fileData.preloadedData);
     }
 }
 
@@ -648,10 +653,17 @@ void sfz::FilePool::setRamLoading(bool loadInRam) noexcept
                 fileData.information.end
             );
             fileData.fullyLoaded = true;
+            holdInMemory(fileData.preloadedData);
         }
     } else {
         setPreloadSize(preloadSize);
     }
+}
+
+void sfz::FilePool::holdInMemory(FileAudioBuffer& buffer) noexcept
+{
+    if (lockSamples && !buffer.lockInMemory())
+        sampleLockFailures.fetch_add(1, std::memory_order_relaxed);
 }
 
 void sfz::FilePool::triggerGarbageCollection() noexcept

@@ -165,8 +165,8 @@ public:
      * @tparam Alignment the alignment block size for the platform
      * @param audioBuffer the source AudioBuffer.
      */
-    template <class U, size_t N, unsigned int Alignment, size_t PaddingLeft, size_t PaddingRight, typename = typename std::enable_if<N <= MaxChannels>::type, typename = typename std::enable_if<std::is_const<U>::value, int>::type>
-    AudioSpan(AudioBuffer<U, N, Alignment, PaddingLeft, PaddingRight>& audioBuffer)
+    template <class U, size_t N, unsigned int Alignment, size_t PaddingLeft, size_t PaddingRight, class Allocator, typename = typename std::enable_if<N <= MaxChannels>::type, typename = typename std::enable_if<std::is_const<U>::value, int>::type>
+    AudioSpan(AudioBuffer<U, N, Alignment, PaddingLeft, PaddingRight, Allocator>& audioBuffer)
         : numFrames(audioBuffer.getNumFrames())
         , numChannels(audioBuffer.getNumChannels())
     {
@@ -186,8 +186,8 @@ public:
      * @tparam Alignment the alignment block size for the platform
      * @param audioBuffer the source AudioBuffer.
      */
-    template <class U, size_t N, unsigned int Alignment, size_t PaddingLeft, size_t PaddingRight, typename = std::enable_if<N <= MaxChannels>>
-    AudioSpan(AudioBuffer<U, N, Alignment, PaddingLeft, PaddingRight>& audioBuffer)
+    template <class U, size_t N, unsigned int Alignment, size_t PaddingLeft, size_t PaddingRight, class Allocator, typename = std::enable_if<N <= MaxChannels>>
+    AudioSpan(AudioBuffer<U, N, Alignment, PaddingLeft, PaddingRight, Allocator>& audioBuffer)
         : numFrames(audioBuffer.getNumFrames())
         , numChannels(audioBuffer.getNumChannels())
     {

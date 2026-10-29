@@ -25,10 +25,12 @@ namespace sfz
  * @tparam Type the underlying type of the buffers
  * @tparam MaxChannels the maximum number of channels in the buffer
  * @tparam Alignment the alignment for the buffers
+ * @tparam Allocator where each channel's memory comes from (Buffer.h)
  */
 template <class Type, size_t MaxChannels = config::maxChannels,
           unsigned int Alignment = config::defaultAlignment,
-          size_t PaddingLeft_ = 0, size_t PaddingRight_ = 0>
+          size_t PaddingLeft_ = 0, size_t PaddingRight_ = 0,
+          class Allocator = HeapAllocator>
 class AudioBuffer {
 public:
     using value_type = typename std::remove_cv<Type>::type;
@@ -260,6 +262,20 @@ public:
     }
 
     /**
+     * @brief Locks every channel's memory, so that it is never swapped out,
+     * until it is freed (Buffer::lockInMemory)
+     *
+     * @return true if every channel's memory is locked
+     */
+    bool lockInMemory() noexcept
+    {
+        bool lockedAll = true;
+        for (size_t i = 0; i < numChannels; ++i)
+            lockedAll &= buffers[i]->lockInMemory();
+        return lockedAll;
+    }
+
+    /**
      * @brief Remove all channels from the buffer and reset it to empty
      *
      */
@@ -295,7 +311,7 @@ public:
     }
 
 private:
-    using buffer_type = Buffer<Type, Alignment>;
+    using buffer_type = Buffer<Type, Alignment, Allocator>;
     using buffer_ptr = std::unique_ptr<buffer_type>;
     static_assert(MaxChannels > 0, "Need a positive number of channels");
     std::array<buffer_ptr, MaxChannels> buffers;

@@ -48,8 +48,17 @@
 class ThreadPool;
 
 namespace sfz {
+// Pages of its own, so that what the rendering thread plays without the
+// loader - the preloaded start of a sample, a file loaded whole - can be locked
+// in memory (FilePool::setSampleLocking, StageKeys #221).
 using FileAudioBuffer = AudioBuffer<float, 2, config::defaultAlignment,
-                                    sfz::config::excessFileFrames, sfz::config::excessFileFrames>;
+                                    sfz::config::excessFileFrames, sfz::config::excessFileFrames,
+                                    PageAllocator>;
+// A file streamed past its preload stays in heap memory, as upstream has it: it
+// is never locked, and the heap reuses what it freed where fresh pages would
+// each be faulted in, which slows the loader the voice is waiting for.
+using StreamedAudioBuffer = AudioBuffer<float, 2, config::defaultAlignment,
+                                        sfz::config::excessFileFrames, sfz::config::excessFileFrames>;
 using FileAudioBufferPtr = std::shared_ptr<FileAudioBuffer>;
 
 struct FileInformation {
@@ -111,7 +120,7 @@ struct FileData
 
     FileAudioBuffer preloadedData;
     FileInformation information;
-    FileAudioBuffer fileData {};
+    StreamedAudioBuffer fileData {};
     int preloadCallCount { 0 };
     std::atomic<Status> status { Status::Invalid };
     bool fullyLoaded { false };
@@ -333,6 +342,19 @@ public:
      */
     void setRamLoading(bool loadInRam) noexcept;
     /**
+     * @brief Lock in memory what the rendering thread plays without the
+     * background loader: the preloaded start of every sample, and every
+     * file loaded whole. A file streamed past its preload is not locked.
+     * Applies to the data read from then on; off by default. See
+     * sfz::Sfizz::setSampleLocking.
+     */
+    void setSampleLocking(bool lock) noexcept { lockSamples = lock; }
+    bool getSampleLocking() const noexcept { return lockSamples; }
+    /**
+     * @brief Sample buffers that could not be locked, since the pool was built.
+     */
+    uint64_t getNumSampleLockFailures() const noexcept { return sampleLockFailures.load(std::memory_order_relaxed); }
+    /**
      * @brief Prepares unused data to be freed on a background thread.
      * This should be called regularly by the Synth, otherwise memory
      * risk building up.
@@ -341,6 +363,10 @@ public:
 private:
 
     absl::optional<sfz::FileInformation> checkExistingFileInformation(const FileId& fileId) noexcept;
+    // Locks a buffer the rendering thread plays without the loader, when asked to.
+    void holdInMemory(FileAudioBuffer& buffer) noexcept;
+    bool lockSamples { false };
+    std::atomic<uint64_t> sampleLockFailures { 0 };
     fs::path rootDirectory;
 
     bool loadInRam { config::loadInRam };
@@ -375,7 +401,7 @@ private:
 
     SpinMutex garbageAndLastUsedMutex;
     std::vector<FileId> lastUsedFiles;
-    std::vector<FileAudioBuffer> garbageToCollect;
+    std::vector<StreamedAudioBuffer> garbageToCollect;
 
     std::shared_ptr<ThreadPool> threadPool;
 
