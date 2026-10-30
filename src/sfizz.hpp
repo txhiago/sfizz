@@ -348,8 +348,9 @@ public:
      * it plays, and can be most of an instrument. Each buffer is mapped pages of
      * its own, so a lock never reaches a neighbor's memory, and is undone when
      * the buffer is freed. A buffer the system refuses to lock (a memory-lock
-     * limit) plays unlocked, as before, and is counted. Applies to the data
-     * read from then on: set it before loading.
+     * limit), or whose pages could not be mapped (it then comes from the heap),
+     * plays unlocked, as before, and is counted. Applies to the data read from
+     * then on: set it before loading.
      *
      * @par Thread-safety constraints
      * - @b CT: the function must be invoked from the Control thread

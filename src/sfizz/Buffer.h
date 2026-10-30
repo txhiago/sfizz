@@ -103,11 +103,19 @@ private:
 /**
  * @brief      Where a Buffer's memory comes from: the heap, zero-filled, as
  *             sfizz always allocated it. Its memory cannot be locked.
+ *
+ * An allocator says through `mapped` whether a block is pages of its own
+ * (PageAllocator's) or heap memory, and is handed it back to release or lock
+ * the block: a PageAllocator falls back to the heap.
  */
 struct HeapAllocator {
-    static void* allocate(size_t bytes) noexcept { return std::calloc(bytes, 1); }
-    static void release(void* p, size_t) noexcept { std::free(p); }
-    static bool lock(void*, size_t) noexcept { return false; }
+    static void* allocate(size_t bytes, bool& mapped) noexcept
+    {
+        mapped = false;
+        return std::calloc(bytes, 1);
+    }
+    static void release(void* p, size_t, bool) noexcept { std::free(p); }
+    static bool lock(void*, size_t, bool) noexcept { return false; }
 };
 
 /**
@@ -118,23 +126,34 @@ struct HeapAllocator {
  *             For sample data the rendering thread reads (StageKeys #221):
  *             the kernel may otherwise swap it out, and the rendering
  *             thread then waits for it to come back. Where pages cannot be
- *             mapped or locked, it falls back to the heap.
+ *             mapped, it falls back to the heap, whose memory is not locked;
+ *             on Windows it is the heap.
  */
-struct PageAllocator {
 #if defined(_WIN32)
-    static void* allocate(size_t bytes) noexcept { return std::calloc(bytes, 1); }
-    static void release(void* p, size_t) noexcept { std::free(p); }
-    static bool lock(void*, size_t) noexcept { return false; }
+using PageAllocator = HeapAllocator;
 #else
-    static void* allocate(size_t bytes) noexcept
+struct PageAllocator {
+    static void* allocate(size_t bytes, bool& mapped) noexcept
     {
         void* p = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        return p == MAP_FAILED ? nullptr : p;
+        mapped = p != MAP_FAILED;
+        // Refused pages (an address space or a map count used up) are no reason
+        // to fail a load the heap can still serve: that memory plays unlocked.
+        return mapped ? p : HeapAllocator::allocate(bytes, mapped);
     }
-    static void release(void* p, size_t bytes) noexcept { munmap(p, bytes); }
-    static bool lock(void* p, size_t bytes) noexcept { return mlock(p, bytes) == 0; }
-#endif
+    static void release(void* p, size_t bytes, bool mapped) noexcept
+    {
+        if (mapped)
+            munmap(p, bytes);
+        else
+            std::free(p);
+    }
+    static bool lock(void* p, size_t bytes, bool mapped) noexcept
+    {
+        return mapped && mlock(p, bytes) == 0;
+    }
 };
+#endif
 
 /**
  * @brief      A heap buffer structure that tries to align its beginning and
@@ -203,15 +222,17 @@ public:
         Type* oldNormalData = normalData;
         std::size_t oldSize = alignedSize;
         std::size_t oldBytes = paddedData.get_deleter().bytes;
+        bool oldMapped = paddedData.get_deleter().mapped;
 
         std::size_t tempSize = newSize + 2 * AlignmentMask; // To ensure that we have leeway at the beginning and at the end
-        Type* newData = reinterpret_cast<Type*>(Allocator::allocate(tempSize * sizeof(value_type)));
+        bool newMapped = false;
+        Type* newData = reinterpret_cast<Type*>(Allocator::allocate(tempSize * sizeof(value_type), newMapped));
         if (newData == nullptr) {
             return false;
         }
         // Memory that was locked stays locked when it moves.
         if (locked)
-            locked = Allocator::lock(newData, tempSize * sizeof(value_type));
+            locked = Allocator::lock(newData, tempSize * sizeof(value_type), newMapped);
 
         if (largerSize > 0)
             counter().bufferResized(largerSize * sizeof(value_type), tempSize * sizeof(value_type));
@@ -223,6 +244,7 @@ public:
         paddedData.release(); // realloc has invalidated the old pointer
         paddedData.reset(static_cast<pointer>(newData));
         paddedData.get_deleter().bytes = tempSize * sizeof(value_type);
+        paddedData.get_deleter().mapped = newMapped;
         normalData = static_cast<pointer>(align(Alignment, alignedSize, newData, tempSize));
         normalEnd = normalData + alignedSize;
         std::size_t endMisalignment = (alignedSize & TypeAlignmentMask);
@@ -236,7 +258,7 @@ public:
         if (oldNormalData != nullptr)
             std::memcpy(normalData, oldNormalData, std::min(newSize, oldSize) * sizeof(Type));
         if (oldData != nullptr)
-            Allocator::release(oldData, oldBytes);
+            Allocator::release(oldData, oldBytes, oldMapped);
 
         return true;
     }
@@ -271,8 +293,8 @@ public:
 
     /**
      * @brief Locks the buffer's memory, so that it is never swapped out, until
-     * it is freed. Only a PageAllocator's memory can be locked; a buffer
-     * resized later stays locked.
+     * it is freed. Only a PageAllocator's mapped memory can be locked, not the
+     * heap it falls back to; a buffer resized later stays locked.
      *
      * @return true if the memory is locked (an empty buffer is, trivially)
      */
@@ -280,7 +302,8 @@ public:
     {
         if (!paddedData)
             return true;
-        locked = Allocator::lock(paddedData.get(), paddedData.get_deleter().bytes);
+        const deleter& block = paddedData.get_deleter();
+        locked = Allocator::lock(paddedData.get(), block.bytes, block.mapped);
         return locked;
     }
 
@@ -373,6 +396,7 @@ private:
         alignedSize = 0;
         paddedData.reset();
         paddedData.get_deleter().bytes = 0;
+        paddedData.get_deleter().mapped = false;
         normalData = nullptr;
         normalEnd = nullptr;
         _alignedEnd = nullptr;
@@ -397,10 +421,12 @@ private:
         return reinterpret_cast<void *>(aligned);
     }
 
-    // Unmapping needs the size, which free() does not: the deleter carries it.
+    // Unmapping needs the size, which free() does not, and a PageAllocator's
+    // block may be heap memory instead: the deleter carries both.
     struct deleter {
         size_t bytes { 0 };
-        void operator()(void *p) const noexcept { Allocator::release(p, bytes); }
+        bool mapped { false };
+        void operator()(void *p) const noexcept { Allocator::release(p, bytes, mapped); }
     };
 
     size_type largerSize { 0 };

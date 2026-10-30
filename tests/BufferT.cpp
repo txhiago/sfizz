@@ -7,6 +7,9 @@
 #include "sfizz/Buffer.h"
 #include "catch2/catch.hpp"
 #include <algorithm>
+#include <cstdlib>
+#include <utility>
+#include <vector>
 using namespace Catch::literals;
 
 TEST_CASE("[Buffer] Empty (float)")
@@ -201,3 +204,87 @@ TEST_CASE("[Buffer] Buffer counter")
     REQUIRE(haveNumBuffers(1));
     REQUIRE(haveTotalAllocation(b2.allocationSize()));
 }
+
+namespace {
+// Hands out mapped and heap blocks in turn, as a PageAllocator does when some
+// pages cannot be mapped (StageKeys #221), and checks that each block is
+// released and locked with the kind it was allocated as.
+struct AlternatingAllocator {
+    static int allocations;
+    static int releases;
+    static int mismatches;
+    static std::vector<std::pair<void*, bool>> live;
+    static void* allocate(size_t bytes, bool& mapped) noexcept
+    {
+        mapped = (allocations++ % 2) == 0;
+        void* p = std::calloc(bytes, 1);
+        live.emplace_back(p, mapped);
+        return p;
+    }
+    static bool kindOf(void* p, bool& mapped)
+    {
+        auto it = std::find_if(live.begin(), live.end(), [p](const std::pair<void*, bool>& b) { return b.first == p; });
+        if (it == live.end())
+            return false;
+        mapped = it->second;
+        return true;
+    }
+    static void release(void* p, size_t, bool mapped) noexcept
+    {
+        bool kind = false;
+        if (!kindOf(p, kind) || kind != mapped)
+            ++mismatches;
+        live.erase(std::remove_if(live.begin(), live.end(), [p](const std::pair<void*, bool>& b) { return b.first == p; }), live.end());
+        ++releases;
+        std::free(p);
+    }
+    static bool lock(void* p, size_t, bool mapped) noexcept
+    {
+        bool kind = false;
+        if (!kindOf(p, kind) || kind != mapped)
+            ++mismatches;
+        return mapped;
+    }
+};
+int AlternatingAllocator::allocations = 0;
+int AlternatingAllocator::releases = 0;
+int AlternatingAllocator::mismatches = 0;
+std::vector<std::pair<void*, bool>> AlternatingAllocator::live;
+} // namespace
+
+TEST_CASE("[Buffer] A block is released and locked as the kind it was allocated")
+{
+    using TestBuffer = sfz::Buffer<float, sfz::config::defaultAlignment, AlternatingAllocator>;
+    {
+        TestBuffer a(64); // mapped
+        TestBuffer b(64); // heap
+        REQUIRE(a.lockInMemory());
+        REQUIRE_FALSE(b.lockInMemory());
+        a.resize(128); // mapped: the lock moves with it
+        REQUIRE(a.lockInMemory());
+        a.resize(256); // heap: it cannot stay locked
+        REQUIRE_FALSE(a.lockInMemory());
+        a.resize(512); // mapped again
+        REQUIRE(a.lockInMemory());
+        b = std::move(a); // b's heap block is released, a's mapped one moves
+        REQUIRE(b.lockInMemory());
+        TestBuffer c(std::move(b));
+        REQUIRE(c.lockInMemory());
+        c.clear();
+        REQUIRE(c.lockInMemory()); // an empty buffer is trivially locked
+    }
+    REQUIRE(AlternatingAllocator::mismatches == 0);
+    REQUIRE(AlternatingAllocator::live.empty());
+    REQUIRE(AlternatingAllocator::releases == AlternatingAllocator::allocations);
+}
+
+#if !defined(_WIN32)
+TEST_CASE("[Buffer] PageAllocator's memory can be locked")
+{
+    sfz::Buffer<float, sfz::config::defaultAlignment, sfz::PageAllocator> buffer(4096);
+    REQUIRE(buffer.lockInMemory());
+    buffer.resize(8192);
+    REQUIRE(buffer.size() == 8192);
+    REQUIRE(buffer.lockInMemory());
+}
+#endif
