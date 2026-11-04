@@ -155,6 +155,17 @@ struct VoiceManager final : public Voice::StateListener
     uint64_t getNumStolenVoices() const noexcept { return stolenVoices_.load(std::memory_order_relaxed); }
 
     /**
+     * @brief The voices sounding: active and neither offed nor free. See
+     * sfz::Sfizz::getNumPlayingVoices.
+     */
+    unsigned getNumPlayingVoices() const noexcept;
+    /**
+     * @brief Up to `count` voices offed for the host, least audible first. See
+     * sfz::Sfizz::makeRoom. Returns how many voices were offed.
+     */
+    unsigned makeRoom(unsigned count, int delay) noexcept;
+
+    /**
      * @brief Get the number of active voices
      *
      * @return size_t

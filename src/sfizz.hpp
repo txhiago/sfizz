@@ -926,6 +926,35 @@ public:
     uint64_t getNumStolenVoices() const noexcept;
 
     /**
+     * @brief Return the number of voices sounding: neither free nor offed, so
+     * a stolen voice still fading out is not counted.
+     *
+     * What a host reads to know whether anything of an instrument still rings
+     * (StageKeys #214: a patch let go of is kept until its voices end), and to
+     * share one voice budget between two instruments. Walks the active voices;
+     * nothing is allocated. Call it from the thread that renders.
+     *
+     * StageKeys addition.
+     */
+    int getNumPlayingVoices() const noexcept;
+
+    /**
+     * @brief Off up to `count` voices, least audible first, for a host that
+     * needs the room for another instrument.
+     *
+     * The order the engine limit makes room in with setReleaseVoicesYield():
+     * release samples, then tails of notes let go, then held notes, oldest
+     * first within each. A stereo pair goes as one and counts as two. Each
+     * voice offed fades out over sfizz's own steal time and is counted in
+     * getNumStolenVoices(). Returns how many voices were offed, which is less
+     * than `count` only when none is left. Real-time safe: call it from the
+     * thread that renders, between blocks.
+     *
+     * StageKeys addition (#214).
+     */
+    int makeRoom(int count) noexcept;
+
+    /**
      * @brief Return the total number of voices in the synth (the polyphony).
      * @since 0.2.0
      */

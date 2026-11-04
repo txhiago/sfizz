@@ -336,6 +336,16 @@ int sfz::Sfizz::getNumRenderingVoices() const noexcept
     return synth->synth.getNumRenderingVoices();
 }
 
+int sfz::Sfizz::getNumPlayingVoices() const noexcept
+{
+    return synth->synth.getNumPlayingVoices();
+}
+
+int sfz::Sfizz::makeRoom(int count) noexcept
+{
+    return synth->synth.makeRoom(count);
+}
+
 uint64_t sfz::Sfizz::getNumStolenVoices() const noexcept
 {
     return synth->synth.getNumStolenVoices();

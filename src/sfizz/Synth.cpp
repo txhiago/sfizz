@@ -1057,6 +1057,20 @@ int Synth::getNumRenderingVoices() const noexcept
     return static_cast<int>(impl.voiceManager_.getNumActiveVoices());
 }
 
+int Synth::getNumPlayingVoices() const noexcept
+{
+    Impl& impl = *impl_;
+    return static_cast<int>(impl.voiceManager_.getNumPlayingVoices());
+}
+
+int Synth::makeRoom(int count) noexcept
+{
+    Impl& impl = *impl_;
+    if (count <= 0)
+        return 0;
+    return static_cast<int>(impl.voiceManager_.makeRoom(static_cast<unsigned>(count), 0));
+}
+
 uint64_t Synth::getNumStolenVoices() const noexcept
 {
     Impl& impl = *impl_;

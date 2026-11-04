@@ -370,6 +370,56 @@ void VoiceManager::advanceReleaseSchedule(int frames) noexcept
     releaseSlots_[maxReleaseBlocksLate] = 0;
 }
 
+unsigned VoiceManager::getNumPlayingVoices() const noexcept
+{
+    unsigned playing = 0;
+    for (const Voice* voice : activeVoices_) {
+        if (voice != nullptr && !voice->offedOrFree())
+            ++playing;
+    }
+    return playing;
+}
+
+unsigned VoiceManager::makeRoom(unsigned count, int delay) noexcept
+{
+    // StageKeys #214: a patch let go of rings on beside the next one, and the
+    // two share one voice budget. The host takes room from this synth in the
+    // order checkEnginePolyphony() makes it at the limit, oldest first within
+    // each: release samples, then tails, then held notes - here a held note
+    // too, since the host is asking for the room whatever this synth plays.
+    unsigned offed = 0;
+    while (offed < count) {
+        Voice* oldestReleaseSample = nullptr;
+        Voice* oldestTail = nullptr;
+        Voice* oldestHeld = nullptr;
+        for (Voice* voice : activeVoices_) {
+            if (voice == nullptr || voice->offedOrFree())
+                continue;
+            Voice** oldest = &oldestHeld;
+            if (voice->getTriggerEvent().type == TriggerEventType::NoteOff)
+                oldest = &oldestReleaseSample;
+            else if (voice->releasing())
+                oldest = &oldestTail;
+            if (*oldest == nullptr || voice->getAge() > (*oldest)->getAge())
+                *oldest = voice;
+        }
+        Voice* victim = oldestReleaseSample != nullptr ? oldestReleaseSample
+            : oldestTail != nullptr                    ? oldestTail
+                                                       : oldestHeld;
+        if (victim == nullptr)
+            break;
+        // A stereo pair goes as one, both voices counted.
+        unsigned ring = 0;
+        SisterVoiceRing::applyToRing(victim, [&](Voice* v) {
+            if (!v->offedOrFree())
+                ++ring;
+        });
+        stealForEngine(victim, delay);
+        offed += ring;
+    }
+    return offed;
+}
+
 void VoiceManager::stealForEngine(Voice* voice, int delay) noexcept
 {
     if (voice == nullptr)

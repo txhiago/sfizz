@@ -595,6 +595,15 @@ public:
      */
     int getNumRenderingVoices() const noexcept;
     /**
+     * @brief Get the number of voices sounding: neither free nor offed - a
+     * stolen voice fading out is not counted. See sfz::Sfizz::getNumPlayingVoices.
+     */
+    int getNumPlayingVoices() const noexcept;
+    /**
+     * @brief Off up to `count` voices, least audible first. See sfz::Sfizz::makeRoom.
+     */
+    int makeRoom(int count) noexcept;
+    /**
      * @brief Get the number of voices cut to make room at the engine's polyphony
      * limit since the synth was built. Any thread.
      */
