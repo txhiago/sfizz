@@ -429,17 +429,21 @@ void VoiceManager::stealForEngine(Voice* voice, int delay) noexcept
     //
     // StageKeys #231: and each by what it was when cut, read from the voice
     // itself, not from the branch that chose it, so the engine limit, makeRoom()
-    // and the configured stealer are classed by one rule: a voice a note-off
-    // started is a release sample, one releasing is a tail, anything else a held
-    // note - a note the sustain pedal holds included, since it is not releasing.
+    // and the configured stealer are classed by one rule: a voice no key holds
+    // (one a note-off or a controller started: release samples, Salamander's
+    // pedal noise) is a release sample, one releasing or a one_shot whose key
+    // is up is a tail, anything else a held note - a note the sustain pedal
+    // holds included, since it is not releasing and its key started it.
     uint64_t releaseSamples = 0;
     uint64_t tails = 0;
     uint64_t held = 0;
     SisterVoiceRing::applyToRing(voice, [&] (Voice* v) {
         if (!v->offedOrFree()) {
-            if (v->getTriggerEvent().type == TriggerEventType::NoteOff)
+            if (v->getTriggerEvent().type != TriggerEventType::NoteOn)
                 ++releaseSamples;
-            else if (v->releasing())
+            else if (v->releasing()
+                || (v->noteIsOff() && v->getRegion() != nullptr
+                    && v->getRegion()->loopMode == LoopMode::one_shot))
                 ++tails;
             else
                 ++held;

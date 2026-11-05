@@ -927,8 +927,9 @@ public:
 
     /**
      * @brief The voices getNumStolenVoices() counts, by what each was when cut:
-     * a release sample (a voice a note-off started), a tail (a note let go,
-     * releasing), or a held note (anything else, a note the sustain pedal holds
+     * a release sample (a voice no key holds: one a note-off or a controller
+     * started), a tail (a note let go: releasing, or a one_shot whose key is
+     * up), or a held note (anything else, a note the sustain pedal holds
      * included). The three add up to getNumStolenVoices(), whichever path cut
      * the voice - the engine limit, makeRoom() or the configured stealer.
      * Monotonic; any thread; each reads a counter.

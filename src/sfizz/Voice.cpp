@@ -1827,6 +1827,12 @@ bool Voice::releasing() const noexcept
     return impl.releaseScheduled_ || impl.released();
 }
 
+bool Voice::noteIsOff() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.noteIsOff_;
+}
+
 bool Voice::offedOrFree() const noexcept
 {
     Impl& impl = *impl_;

@@ -219,6 +219,13 @@ public:
      */
     bool releasing() const noexcept;
     /**
+     * @brief Has the key that started the voice been let go? StageKeys #231: a
+     * one_shot voice plays on past its note-off without releasing, so
+     * releasing() alone does not say the player let go of it. True too for a
+     * note the sustain pedal holds, whose key is up: read it with the loop mode.
+     */
+    bool noteIsOff() const noexcept;
+    /**
      * @brief Can the voice be reused (i.e. is it releasing after being killed or free)
      *
      * @return true
