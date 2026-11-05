@@ -608,6 +608,12 @@ public:
      * limit since the synth was built. Any thread.
      */
     uint64_t getNumStolenVoices() const noexcept;
+    /**
+     * @brief The stolen voices by class. See sfz::Sfizz::getNumStolenReleaseSamples.
+     */
+    uint64_t getNumStolenReleaseSamples() const noexcept;
+    uint64_t getNumStolenTails() const noexcept;
+    uint64_t getNumStolenHeldNotes() const noexcept;
 
     /**
      * @brief Get the active voices as a view

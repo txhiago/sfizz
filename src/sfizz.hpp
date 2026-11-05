@@ -926,6 +926,20 @@ public:
     uint64_t getNumStolenVoices() const noexcept;
 
     /**
+     * @brief The voices getNumStolenVoices() counts, by what each was when cut:
+     * a release sample (a voice a note-off started), a tail (a note let go,
+     * releasing), or a held note (anything else, a note the sustain pedal holds
+     * included). The three add up to getNumStolenVoices(), whichever path cut
+     * the voice - the engine limit, makeRoom() or the configured stealer.
+     * Monotonic; any thread; each reads a counter.
+     *
+     * StageKeys addition (#231).
+     */
+    uint64_t getNumStolenReleaseSamples() const noexcept;
+    uint64_t getNumStolenTails() const noexcept;
+    uint64_t getNumStolenHeldNotes() const noexcept;
+
+    /**
      * @brief Return the number of voices sounding: neither free nor offed, so
      * a stolen voice still fading out is not counted.
      *

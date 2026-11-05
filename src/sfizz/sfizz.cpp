@@ -351,6 +351,21 @@ uint64_t sfz::Sfizz::getNumStolenVoices() const noexcept
     return synth->synth.getNumStolenVoices();
 }
 
+uint64_t sfz::Sfizz::getNumStolenReleaseSamples() const noexcept
+{
+    return synth->synth.getNumStolenReleaseSamples();
+}
+
+uint64_t sfz::Sfizz::getNumStolenTails() const noexcept
+{
+    return synth->synth.getNumStolenTails();
+}
+
+uint64_t sfz::Sfizz::getNumStolenHeldNotes() const noexcept
+{
+    return synth->synth.getNumStolenHeldNotes();
+}
+
 int sfz::Sfizz::getNumVoices() const noexcept
 {
     return synth->synth.getNumVoices();

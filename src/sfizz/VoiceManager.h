@@ -153,6 +153,14 @@ struct VoiceManager final : public Voice::StateListener
      * manager was built. See sfz::Sfizz::getNumStolenVoices. Any thread.
      */
     uint64_t getNumStolenVoices() const noexcept { return stolenVoices_.load(std::memory_order_relaxed); }
+    /**
+     * @brief The stolen voices by what each was when cut: a release sample, a
+     * tail of a note let go, or a held note. They add up to getNumStolenVoices().
+     * See sfz::Sfizz::getNumStolenReleaseSamples. Any thread.
+     */
+    uint64_t getNumStolenReleaseSamples() const noexcept { return stolenReleaseSamples_.load(std::memory_order_relaxed); }
+    uint64_t getNumStolenTails() const noexcept { return stolenTails_.load(std::memory_order_relaxed); }
+    uint64_t getNumStolenHeldNotes() const noexcept { return stolenHeld_.load(std::memory_order_relaxed); }
 
     /**
      * @brief The voices sounding: active and neither offed nor free. See
@@ -210,6 +218,10 @@ private:
     bool releaseVoicesYield_ { false };
     // Written by the thread that renders, read by any: relaxed, a count.
     std::atomic<uint64_t> stolenVoices_ { 0 };
+    // StageKeys #231: the same voices by class, adding up to stolenVoices_.
+    std::atomic<uint64_t> stolenReleaseSamples_ { 0 };
+    std::atomic<uint64_t> stolenTails_ { 0 };
+    std::atomic<uint64_t> stolenHeld_ { 0 };
     std::atomic<uint64_t> skippedReleases_ { 0 };
     // Written by the thread that dispatches notes, read by any: relaxed, a count.
     std::atomic<uint64_t> failedStarts_ { 0 };

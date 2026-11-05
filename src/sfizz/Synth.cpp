@@ -1077,6 +1077,24 @@ uint64_t Synth::getNumStolenVoices() const noexcept
     return impl.voiceManager_.getNumStolenVoices();
 }
 
+uint64_t Synth::getNumStolenReleaseSamples() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getNumStolenReleaseSamples();
+}
+
+uint64_t Synth::getNumStolenTails() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getNumStolenTails();
+}
+
+uint64_t Synth::getNumStolenHeldNotes() const noexcept
+{
+    Impl& impl = *impl_;
+    return impl.voiceManager_.getNumStolenHeldNotes();
+}
+
 std::vector<const Voice*> Synth::getActiveVoices() const noexcept
 {
     Impl& impl = *impl_;

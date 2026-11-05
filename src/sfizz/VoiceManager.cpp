@@ -426,13 +426,30 @@ void VoiceManager::stealForEngine(Voice* voice, int delay) noexcept
         return;
     // StageKeys: counted per voice, sisters included - a stereo SF2 note is two -
     // and only those still sounding, so a sister already cut is not counted twice.
-    uint64_t stolen = 0;
+    //
+    // StageKeys #231: and each by what it was when cut, read from the voice
+    // itself, not from the branch that chose it, so the engine limit, makeRoom()
+    // and the configured stealer are classed by one rule: a voice a note-off
+    // started is a release sample, one releasing is a tail, anything else a held
+    // note - a note the sustain pedal holds included, since it is not releasing.
+    uint64_t releaseSamples = 0;
+    uint64_t tails = 0;
+    uint64_t held = 0;
     SisterVoiceRing::applyToRing(voice, [&] (Voice* v) {
-        if (!v->offedOrFree())
-            ++stolen;
+        if (!v->offedOrFree()) {
+            if (v->getTriggerEvent().type == TriggerEventType::NoteOff)
+                ++releaseSamples;
+            else if (v->releasing())
+                ++tails;
+            else
+                ++held;
+        }
         v->off(delay, true);
     });
-    stolenVoices_.fetch_add(stolen, std::memory_order_relaxed);
+    stolenReleaseSamples_.fetch_add(releaseSamples, std::memory_order_relaxed);
+    stolenTails_.fetch_add(tails, std::memory_order_relaxed);
+    stolenHeld_.fetch_add(held, std::memory_order_relaxed);
+    stolenVoices_.fetch_add(releaseSamples + tails + held, std::memory_order_relaxed);
 }
 
 } // namespace sfz
